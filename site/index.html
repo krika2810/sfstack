@@ -423,7 +423,8 @@ function drawMap(){
  mbody.innerHTML='';var shown=0;
  MAP.forEach(function(r){
    if(mstate.f!=='all'&&r[2]!==mstate.f)return;
-   var hay=(r[0]+' '+r[1]+' '+r[2]+' '+r[3]).toLowerCase();
+   var lbl={port:'ported',new:'new in sfstack',carry:'carried',folded:'folded in',skip:'not ported skipped'}[r[2]];
+   var hay=(r[0]+' '+r[1]+' '+r[2]+' '+lbl+' '+r[3]).toLowerCase();
    if(mstate.q&&hay.indexOf(mstate.q)===-1)return;
    shown++;
    var tr=document.createElement('tr');

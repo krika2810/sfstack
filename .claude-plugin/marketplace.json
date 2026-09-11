@@ -1,0 +1,13 @@
+{
+  "name": "sfstack",
+  "owner": {
+    "name": "Krishnamurthy KA"
+  },
+  "plugins": [
+    {
+      "name": "sfstack",
+      "source": "./",
+      "description": "pstack, rebuilt for Salesforce: rigorous agent engineering skills tuned to governor limits, multi-tenancy, metadata deployments, scratch orgs, and the sf CLI. Grounded in Salesforce Well-Architected."
+    }
+  ]
+}

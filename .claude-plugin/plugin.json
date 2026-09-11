@@ -1,0 +1,9 @@
+{
+  "name": "sfstack",
+  "version": "0.1.0",
+  "description": "pstack, rebuilt for Salesforce: rigorous agent engineering skills tuned to governor limits, multi-tenancy, metadata deployments, scratch orgs, and the sf CLI. Inspired by Lauren Tan's pstack; grounded in Salesforce Well-Architected.",
+  "author": {
+    "name": "Krishnamurthy KA"
+  },
+  "license": "MIT"
+}

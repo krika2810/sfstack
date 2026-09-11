@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SF Stack: pstack, rebuilt for Salesforce</title>
+<meta name="description" content="Lauren Tan's pstack converted for Salesforce: verification loops, scratch-org parallelism, and governor-limit discipline. Grounded in Salesforce Well-Architected.">
+<script>
+(function(){
+  var saved; try{saved=localStorage.getItem('sfstack-theme')}catch(e){}
+  var theme=saved||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  document.documentElement.dataset.theme=theme;
+  document.documentElement.style.colorScheme=theme;
+})();
+</script>
+<style>
+@font-face{font-family:'AWS Diatype';src:url('fonts/AWSDiatype-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'AWS Diatype';src:url('fonts/AWSDiatype-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'AWS Diatype';src:url('fonts/AWSDiatype-RegularItalic.woff2') format('woff2');font-weight:400;font-style:italic}
+@font-face{font-family:'AWS Diatype Rounded Semi Mono';src:url('fonts/AWSDiatypeRoundedSemi-Mono-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'AWS Diatype Rounded Semi Mono';src:url('fonts/AWSDiatypeRoundedSemi-Mono-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Fragment Mono';src:url('fonts/FragmentMono-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Fragment Mono';src:url('fonts/FragmentMono-Italic.woff2') format('woff2');font-weight:400;font-style:italic}
+:root{--bg:#0a0a0f;--bg-card:#15151d;--line:#26262f;--line-soft:#1d1d26;--ink:#f4f4f6;--ink-dim:#b8b8c2;--ink-faint:#7d7d8c;--purple:#a855f7;--purple-soft:#c084fc;--purple-pale:#e9d5ff;--purple-deep:#7e22ce;--purple-glow:rgba(168,85,247,.14);--green:#34d399;--cloud:#0aa5e2;--sans:'AWS Diatype',ui-sans-serif,system-ui,sans-serif;--display:'AWS Diatype Rounded Semi Mono','AWS Diatype',monospace;--mono:'Fragment Mono',monospace}
+:root[data-theme="light"]{color-scheme:light;--bg:#f8f7fb;--bg-card:#fff;--line:#e2ddee;--line-soft:#ebe6f2;--ink:#221b2e;--ink-dim:#4c4459;--ink-faint:#857d94;--purple:#7c3aed;--purple-soft:#7c3aed;--purple-pale:#5b21b6;--purple-deep:#8b5cf6;--purple-glow:rgba(124,58,237,.09);--green:#15803d;--cloud:#0369a1}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.75;-webkit-font-smoothing:antialiased}::selection{background:var(--purple);color:#0a0a0f}a{color:var(--purple-soft);text-decoration:none}a:hover{color:var(--purple-pale)}.wrap{max-width:760px;margin:0 auto;padding:0 24px}
+.topbar{border-bottom:1px solid var(--line-soft);padding:18px 0;position:sticky;top:0;background:rgba(10,10,15,.88);backdrop-filter:blur(12px);z-index:50}.topbar .wrap{display:flex;justify-content:space-between;align-items:center;max-width:1100px;gap:14px}.brand{font-family:var(--display);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}.brand b{color:var(--purple-soft)}.toplinks{display:flex;gap:16px;align-items:center}.back{font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+:root[data-theme="light"] .topbar{background:rgba(248,247,251,.9)}
+.theme-toggle{font-family:var(--mono);font-size:11px;letter-spacing:.12em;display:flex;gap:7px;align-items:center;background:transparent;color:var(--ink-faint);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}.theme-toggle:hover{border-color:var(--purple);color:var(--ink)}
+.hero{padding:96px 0 72px;border-bottom:1px solid var(--line-soft);position:relative;overflow:hidden}.hero:before{content:'';position:absolute;top:-260px;left:50%;transform:translateX(-50%);width:900px;height:520px;background:radial-gradient(ellipse,var(--purple-glow),transparent 65%)}.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--purple-soft);margin-bottom:28px;display:flex;align-items:center;gap:12px}.kicker:before{content:'';width:34px;height:1px;background:var(--purple)}h1{font-family:var(--display);font-size:clamp(38px,6.4vw,64px);line-height:1.06;margin-bottom:28px}.accent{color:var(--purple-soft)}.sfblue{color:var(--cloud)}.lede{font-size:19px;color:var(--ink-dim);max-width:680px}.meta{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:34px;line-height:2}
+.intro,.section,.glossary{padding:78px 0;border-bottom:1px solid var(--line-soft);position:relative}.intro h2,.section h2,.glossary h2{font-family:var(--display);font-size:clamp(26px,3.6vw,34px);line-height:1.2;margin-bottom:26px}.prose p{margin-bottom:22px;color:var(--ink-dim)}.prose b,.prose strong{color:var(--ink)}
+.takeaway{margin:30px 0 36px;padding:22px 26px;background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.03));border:1px solid rgba(168,85,247,.32);border-radius:12px}:root[data-theme="light"] .takeaway{background:linear-gradient(135deg,rgba(124,58,237,.09),rgba(124,58,237,.02));border-color:rgba(124,58,237,.3)}.takeaway .tag,.chap{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--purple-soft)}.takeaway p{margin:8px 0 0;color:var(--ink);font-size:18px;line-height:1.6}.chap{margin-bottom:18px;display:flex;gap:14px;align-items:center}.chap:after{content:'';height:1px;background:var(--line);flex:1}.ghost{font-family:var(--display);font-weight:700;font-size:clamp(80px,14vw,130px);line-height:.8;color:transparent;-webkit-text-stroke:1px #23232e;position:absolute;top:60px;right:24px;pointer-events:none}:root[data-theme="light"] .ghost{-webkit-text-stroke-color:#ddd6e8}
+.term{color:var(--ink);border-bottom:1px dotted var(--purple-soft);cursor:help;position:relative}.tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%) translateY(4px);width:min(300px,80vw);background:#1c1c26;border:1px solid var(--purple-deep);border-radius:10px;padding:12px 15px;font-size:13.5px;line-height:1.55;color:var(--ink-dim);z-index:60;transition:.18s;pointer-events:none;box-shadow:0 12px 34px rgba(0,0,0,.55)}:root[data-theme="light"] .tip{background:#fff;box-shadow:0 10px 30px rgba(32,27,39,.14)}.tip b{display:block;color:var(--purple-pale);font-family:var(--mono);font-size:11px;text-transform:uppercase;margin-bottom:4px}.term:hover .tip,.term.open .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+.pull{margin:36px 0;padding:6px 0 6px 26px;border-left:2px solid var(--purple);font-family:var(--display);font-size:21px;line-height:1.45;color:var(--ink)}
+.srcnote{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:36px;padding-top:16px;border-top:1px dashed var(--line);line-height:2}
+.glist{display:grid;grid-template-columns:1fr 1fr;gap:14px}.gitem{background:var(--bg-card);border:1px solid var(--line-soft);border-radius:10px;padding:16px 20px}.gitem dt{font-family:var(--mono);font-size:13px;color:var(--purple-soft)}.gitem dd{font-size:14.5px;line-height:1.55;color:var(--ink-dim)}@media(max-width:640px){.glist{grid-template-columns:1fr}}
+.footer{padding:64px 0 90px;color:var(--ink-faint);font-size:14px}
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--purple);width:0;z-index:100}
+.widget{border:1px solid var(--line);border-radius:14px;background:var(--bg-card);padding:26px;margin:30px 0}
+.widget h3{font-family:var(--display);font-size:17px;margin-bottom:6px}.wnote{font-family:var(--mono);font-size:12px;color:var(--ink-faint);font-weight:400;margin-left:10px}
+.wbtn{font-family:var(--mono);font-size:12.5px;background:transparent;color:var(--ink-dim);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;transition:all .15s}.wbtn:hover{border-color:var(--purple);color:var(--ink)}.wbtn.on{background:var(--purple);border-color:var(--purple);color:#0a0a0f}:root[data-theme="light"] .wbtn.on{color:#fff}
+.chipgrid{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.chip{font-family:var(--mono);font-size:12px;background:transparent;color:var(--ink-dim);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;transition:all .15s}.chip:hover{border-color:var(--purple);color:var(--ink)}.chip.on{background:var(--purple);border-color:var(--purple);color:#0a0a0f}:root[data-theme="light"] .chip.on{color:#fff}
+.detail{border:1px solid var(--line-soft);border-radius:10px;padding:18px 20px;background:#0d0d13;font-size:14.5px;line-height:1.6;color:var(--ink-dim);min-height:96px}:root[data-theme="light"] .detail{background:#f5f2f8}.detail b{color:var(--ink)}.detail .dnum{font-family:var(--display);font-size:26px;color:var(--purple-soft);display:block;margin-bottom:6px}.detail code,.prose code{font-family:var(--mono);font-size:.86em;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.22);border-radius:6px;padding:1px 6px;color:var(--purple-pale)}
+.lloop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0}.lnode{font-family:var(--display);font-size:12px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:12px 10px;min-width:86px;color:var(--ink-dim);transition:all .25s}.lnode small{display:block;color:var(--ink-faint);font-size:10px;margin-top:3px}.lnode.lit{border-color:var(--purple);color:var(--ink);box-shadow:0 0 16px var(--purple-glow)}.lnode.done{border-color:var(--green);color:var(--ink)}.larrow{color:var(--ink-faint)}
+.llog{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);background:#0d0d13;border:1px solid var(--line-soft);border-radius:10px;padding:16px;min-height:120px;max-height:260px;overflow-y:auto;line-height:1.9}:root[data-theme="light"] .llog{background:#f5f2f8}.llog .ok{color:var(--green)}.llog .bad{color:#f87171}.llog .cmd{color:var(--purple-soft)}
+.flipgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}@media(max-width:640px){.flipgrid{grid-template-columns:1fr}}.flip{perspective:900px;cursor:pointer;min-height:190px}.flip-in{position:relative;width:100%;height:100%;min-height:190px;transition:transform .55s;transform-style:preserve-3d}.flip.flipped .flip-in{transform:rotateY(180deg)}.ff{position:absolute;inset:0;backface-visibility:hidden;border:1px solid var(--line);border-radius:12px;padding:20px;background:#0d0d13;display:flex;flex-direction:column;justify-content:center;gap:8px}:root[data-theme="light"] .ff{background:#f5f2f8}.ff.backf{transform:rotateY(180deg);border-color:var(--purple-deep)}.ff h4{font-family:var(--display);font-size:15px;color:var(--purple-soft)}.ff p{font-size:13.5px;line-height:1.6;color:var(--ink-dim)}.ff .flip-hint{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.14em}
+.mtable{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:18px}.mtable th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}.mtable td{padding:10px 12px;border-bottom:1px solid var(--line-soft);color:var(--ink-dim);vertical-align:top;line-height:1.55}.mtable td:first-child{font-family:var(--mono);font-size:12px;color:var(--purple-soft);white-space:nowrap}.mtable tr:hover td{background:rgba(168,85,247,.05)}.badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}.badge.port{border-color:var(--purple);color:var(--purple-soft)}.badge.new{border-color:var(--green);color:var(--green)}.badge.carry{border-color:var(--line);color:var(--ink-faint)}.badge.skip{border-color:#f87171;color:#f87171}
+.minput{width:100%;font-family:var(--mono);font-size:13px;background:#0d0d13;border:1px solid var(--line);border-radius:9px;padding:11px 14px;color:var(--ink);margin-bottom:12px}:root[data-theme="light"] .minput{background:#f5f2f8}.minput:focus{outline:none;border-color:var(--purple)}
+.codelock{font-family:var(--mono);font-size:13px;background:#0d0d13;border:1px solid var(--line-soft);border-radius:10px;padding:20px 22px;line-height:2;color:var(--ink-dim);overflow-x:auto;white-space:pre}:root[data-theme="light"] .codelock{background:#f5f2f8}.codelock .cm{color:var(--ink-faint)}.codelock .cmd{color:var(--purple-soft)}
+.wa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}@media(max-width:640px){.wa-grid{grid-template-columns:1fr}}.wa-col{border:1px solid var(--line);border-radius:12px;padding:20px;background:var(--bg-card)}.wa-col h4{font-family:var(--display);font-size:15px;color:var(--purple-soft);margin-bottom:4px}.wa-col .wa-sub{font-family:var(--mono);font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.12em;display:block;margin-bottom:12px}.wa-col ul{list-style:none}.wa-col li{font-size:13.5px;color:var(--ink-dim);padding:6px 0;border-bottom:1px solid var(--line-soft);line-height:1.5}.wa-col li:last-child{border-bottom:none}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0}.toc a{font-family:var(--mono);font-size:12px;color:var(--ink-faint);border:1px solid var(--line-soft);border-radius:999px;padding:6px 13px}.toc a:hover{border-color:var(--purple);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="topbar"><div class="wrap"><span class="brand">SF <b>STACK</b> / PSTACK FOR SALESFORCE</span><div class="toplinks"><a class="back" href="https://github.com/krika2810/sfstack">GITHUB</a><button class="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false"><span class="theme-icon" aria-hidden="true">☀</span><span class="theme-label">LIGHT</span></button></div></div></div>
+<header class="hero"><div class="wrap">
+<div class="kicker">A conversion of Lauren Tan's pstack, for architects</div>
+<h1>pstack, rebuilt for <span class="sfblue">Salesforce</span>.</h1>
+<p class="lede">Lauren Tan ships about 2,000 pull requests a month using pstack - her open-source set of agent skills for rigorous engineering. This project converts it, piece by piece, for a platform she never targeted: a governed, multi-tenant cloud with <span class="term">governor limits<span class="tip"><b>Governor limits</b>Hard per-transaction caps Salesforce enforces on a shared runtime - queries, rows, CPU time, heap. Breach one and your transaction is killed on the spot.</span></span>, metadata deployments, and a mandatory test gate. Same discipline, rebuilt around Salesforce reality, and grounded in <span class="term">Salesforce Well-Architected<span class="tip"><b>Well-Architected</b>Salesforce's own framework for healthy solutions, organized around three capabilities: Trusted, Easy, Adaptable - with prescriptive patterns and anti-patterns.</span></span>.</p>
+<p class="meta">Original concept: <a href="https://x.com/poteto">Lauren Tan (@poteto)</a> · <a href="https://github.com/cursor/plugins/tree/main/pstack">pstack repo</a> (MIT)<br>Salesforce conversion + this site: Krishnamurthy KA · <a href="https://github.com/krika2810/sfstack">sfstack repo</a> (MIT)<br>Grounded in <a href="https://architect.salesforce.com/well-architected/overview">architect.salesforce.com</a> and the Salesforce developer docs, cited throughout</p>
+<div class="toc">
+<a href="#why">01 Why Salesforce is different</a><a href="#gifts">02 The two gifts</a><a href="#loop">03 The verification loop</a><a href="#mapping">04 The full mapping</a><a href="#principles">05 SF-native principles</a><a href="#wa">06 Well-Architected grounding</a><a href="#honest">07 Honest limitations</a><a href="#install">08 Install</a>
+</div>
+</div></header>
+
+<section class="intro"><div class="wrap">
+<div class="chap">The thesis</div>
+<h2>Salesforce is the rare platform where pstack's hardest prerequisites ship in the box.</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>pstack asks you to build two things: a control CLI so agents can drive your app, and disposable environments so agents can work in parallel. Salesforce already ships both - the sf CLI and scratch orgs. What is missing is the skill that wires them together, and the discipline tuned to a governed runtime.</p></div>
+<div class="prose">
+<p>In <a href="https://x.com/poteto/status/2094457600259842065">Part 1</a> of her guide, Lauren's core lesson is that verification is everything: the agent must be able to check its own work - run the app, click through it, read logs - or the human stays the bottleneck. To get there on a normal app you invest heavily: a scriptable control CLI, reproducible environments, a feature map. Her advice for parallelism in <a href="https://x.com/poteto/status/2097732320606507506">Part 2</a> is fleets of cloud agents, each with a real machine.</p>
+<p>A Salesforce team starts further ahead than almost anyone: the <b>sf CLI</b> already launches environments (scratch orgs), drives data and logic (<code>sf data</code>, <code>sf apex run</code>), observes behavior (debug logs, test results, deployment reports), and tears everything down. <b>Scratch orgs</b> are the disposable parallel machines - ephemeral, source-tracked, scriptable. The platform even ships the discipline problem: you cannot be sloppy here, because the runtime kills sloppy work automatically (governor limits, below). sfstack's job is to convert pstack's skills so they speak this platform's language.</p>
+</div>
+</div></section>
+
+<section class="section" id="why"><div class="wrap"><div class="ghost">01</div>
+<div class="chap">Grounding</div>
+<h2>Why Salesforce is a different animal</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>Four platform facts change how agents must work: limits you cannot catch, a runtime you do not control, deployments that are metadata transactions, and tests that are a legal gate for shipping.</p></div>
+<div class="prose">
+<p><b>1. Governor limits are uncatchable.</b> Salesforce runs your code in a shared, multi-tenant runtime and caps every transaction: queries, rows, DML, CPU time, heap. Breach a cap and the transaction dies instantly with <code>System.LimitException</code> - and here is the part that changes agent behavior: <b>you cannot try/catch it</b>. There is no recovery path, no graceful degradation, no "handle the error." The only winning strategy is never getting near the limit. So where pstack teaches agents to verify after building, sfstack also teaches them to <b>budget before building</b>: bulkify everything (operate on collections, never one record at a time), write selective queries, and probe headroom with the <code>Limits</code> class while verifying.</p>
+<p><b>2. You never control the runtime.</b> There is no local server to run, no process to attach a debugger to, no host to install tools on. Logs exist only when someone enabled them (trace flags) and are volume-capped. Verification on Salesforce means: deploy to a real org and observe what the platform lets you observe. This is why the control layer matters more here, not less.</p>
+<p><b>3. Deployments are metadata transactions, and tests are the gate.</b> You do not "restart the app" - you deploy metadata (Apex, objects, Flows, all as XML source) into an org, asynchronously. Production deployments are <b>legally blocked until at least 75% of your Apex is covered by passing tests</b>. Salesforce even gives you the rehearsal: <code>sf project deploy validate</code> runs the full deployment analysis plus tests without committing anything. In sfstack, that validate run becomes the pre-merge proof every agent attaches to its work.</p>
+<p><b>4. Metadata is the code.</b> A record-triggered Flow is code that runs inside your transaction. Well-Architected says it plainly: don't use org-based development - adopt source-driven development with the Salesforce CLI. So sfstack treats Flows, validation rules, and objects with the same rigor as Apex: reviewed, tested, version-controlled, blast-radiused before change.</p>
+</div>
+<div class="widget">
+<h3>The governor-limit explorer<span class="wnote">// click a limit; these are the numbers agents must design around</span></h3>
+<div class="chipgrid" id="limchips"></div>
+<div class="detail" id="limdetail">Pick a limit above.</div>
+</div>
+<p class="srcnote">Numbers from the official <a href="https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_gov_limits.htm">Execution Governors and Limits</a> doc (read September 11, 2026). Sync / async columns: asynchronous Apex (batch, queueable, future) gets a bigger budget on some limits - one reason sfstack has an "async for volume" principle.</p>
+</div></section>
+
+<section class="section" id="gifts"><div class="wrap"><div class="ghost">02</div>
+<div class="chap">The conversion's head start</div>
+<h2>The two gifts Salesforce hands you</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>pstack Part 1 tells you to build a control CLI and rent cloud agents. On Salesforce both already exist: the sf CLI is the control layer, and scratch orgs are the disposable fleet.</p></div>
+<div class="prose">
+<p><b>Gift one: the sf CLI is a ready-made control CLI.</b> Lauren has agents build a small command-line tool to drive the app - launch it, interact, observe, clean up. The sf CLI covers all four jobs against real orgs. sfstack's verification skills are built from these commands, grouped exactly the way pstack groups its control CLI:</p>
+</div>
+<div class="widget">
+<h3>The sf control layer<span class="wnote">// click any command to see what the agent uses it for</span></h3>
+<div class="chipgrid" id="sfcats"></div>
+<div class="chipgrid" id="sfchips"></div>
+<div class="detail" id="sfdetail">Pick a command above.</div>
+</div>
+<div class="prose">
+<p><b>Gift two: scratch orgs are pstack's cloud agents.</b> When Lauren wants parallelism, she spins up cloud agents on rented machines. A Salesforce agent spins up <b>scratch orgs</b>: ephemeral orgs created from a definition file, source-tracked, deletable with one command, living up to 30 days. Every parallel agent gets its own throwaway org - deploy the branch, run the experiment, capture evidence, delete. No worktrees eating your laptop, no shared sandbox everyone trips over.</p>
+<p>The punchline architects appreciate: the platform governor-limits the harness itself. Your DevHub caps how many scratch orgs you can create per day, so sfstack's swarm and arena skills <b>budget org creation before fanning out</b> - the same prevent-don't-catch thinking, one level up.</p>
+</div>
+<p class="srcnote">Sources: <a href="https://developer.salesforce.com/docs/platform/salesforce-cli-reference/guide/cli_reference.html">Salesforce CLI Command Reference</a>, <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_scratch_orgs.htm">Scratch Orgs - Salesforce DX Guide</a>.</p>
+</div></section>
+<section class="section" id="loop"><div class="wrap"><div class="ghost">03</div>
+<div class="chap">The centerpiece</div>
+<h2>The verification loop, Salesforce style</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>pstack's loop - change, drive the app, check, repeat - becomes: change, validate (check-only deploy + tests), deploy to a scratch org, run Apex tests, drive the real UI, capture proof. Tests alone are not verification; the agent runs the behavior for real.</p></div>
+<div class="prose">
+<p>Lauren's blunt rule: a task is verified only when the agent actually ran the code and saw it work - tests alone do not count. Salesforce makes that rule natural to keep, because its tests are already the deployment gate, and its scratch orgs make the "real run" cheap. The loop below is what sfstack's <code>verify-&lt;project&gt;</code> skill (generated by <code>/sf-create-verification-skill</code>) automates per project. Press run and watch who does the checking.</p>
+</div>
+<div class="widget">
+<h3>One task, two worlds<span class="wnote">// press run and watch who does the checking</span></h3>
+<div style="margin-bottom:14px"><button class="wbtn" id="wwithout">Without verification</button> <button class="wbtn on" id="wwith">With verification</button> <button class="wbtn go" id="wrun">▶ Run the task</button></div>
+<div class="lloop" id="lloop"></div>
+<div class="lloop-label" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin:4px 0 14px" id="lnote"></div>
+<div class="llog" id="llog">The run log will appear here.</div>
+</div>
+<div class="prose">
+<p>In the "without" world every check routes through a human: deploy by hand, click around, read the error, repeat. In the "with" world the agent rehearses the deployment (<code>validate</code>), proves behavior in a scratch org, attaches the evidence (deployment ID, test-run ID, screenshots, log excerpts), and only then asks for review. <b>Your job moves from checking work to reviewing proof</b> - and the proof has IDs, so you can re-run it.</p>
+<p>What the Salesforce version adds to pstack's loop: <b>the validate step</b> (the platform's own rehearsal), <b>governor-limit telemetry</b> in the evidence (SOQL counts, heap, CPU at realistic volume - "it passed" without numbers is not proof at volume), and <b>cleanup that deletes the org but keeps the evidence</b>.</p>
+</div>
+</div></section>
+
+<section class="section" id="mapping"><div class="wrap"><div class="ghost">04</div>
+<div class="chap">Every piece accounted for</div>
+<h2>The full mapping: all 47 pstack skills, 23 principles, 23 playbooks</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>Verified against the live pstack repo (cursor/plugins, September 2026): 20 core skills ported and adapted, 1 new Salesforce skill added, 4 deliberately not ported, all 23 engineering principles carried, 8 Salesforce-native principles added, 23 playbooks distilled to 10. Nothing dropped silently - the skips are named with their reasons.</p></div>
+<div class="prose">
+<p>A conversion you can't audit is just a rebrand. The table below is the complete inventory: every skill in the upstream repo and where it landed in sfstack. Filter it, search it, check the counts - the repo's README carries the same table.</p>
+</div>
+<div class="widget">
+<h3>The mapping table<span class="wnote">// 47 skills + 23 playbooks, searchable</span></h3>
+<input class="minput" id="msearch" type="text" placeholder="Filter: try 'verify', 'arena', 'playbook', 'not ported'...">
+<div class="chipgrid" id="mfilters"></div>
+<div style="overflow-x:auto"><table class="mtable"><thead><tr><th>pstack (upstream)</th><th>sfstack</th><th>status</th><th>what changed and why</th></tr></thead><tbody id="mbody"></tbody></table></div>
+<div style="font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:12px" id="mcount"></div>
+</div>
+</div></section>
+<section class="section" id="principles"><div class="wrap"><div class="ghost">05</div>
+<div class="chap">The discipline layer</div>
+<h2>Eight Salesforce-native principles</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>pstack's 23 engineering principles carry over untouched. These eight are new - each one is a Salesforce platform rule the agent applies while it works, and each is grounded in Well-Architected or the Apex docs. Click a card to flip it.</p></div>
+<div class="flipgrid" id="flipgrid"></div>
+<div class="prose">
+<p>These are not style preferences. Every one traces to a named platform behavior: the uncatchable <code>LimitException</code>, the 75% deploy gate, the recursive order of execution, per-org record IDs, the system-mode default in Apex. An agent that internalizes these stops producing the classic Salesforce failure shapes - the trigger that dies at 101 records, the flow that breaks the data load, the integration that leaks records because nobody chose a sharing mode.</p>
+</div>
+</div></section>
+
+<section class="section" id="wa"><div class="wrap"><div class="ghost">06</div>
+<div class="chap">For the architects checking our work</div>
+<h2>Grounded in Salesforce Well-Architected</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>sfstack's rules are not invented - they are Salesforce's own framework, made executable by agents. Trusted, Easy, Adaptable: each pillar has patterns sfstack turns into checks the agent runs, not posters on a wall.</p></div>
+<div class="wa-grid">
+<div class="wa-col"><h4>Trusted</h4><span class="wa-sub">Secure · Compliant · Reliable</span><ul>
+<li><b>Secure</b> → the enforce-access-explicitly principle: CRUD/FLS and sharing chosen deliberately; guest-user paths reviewed line by line.</li>
+<li><b>Reliable - Performance</b> → bulkify-by-default and selective-queries, straight from the throughput pattern table (SOQL/DML in loops named anti-patterns).</li>
+<li><b>Reliable - Scalability</b> → the 10,000-record skew rules (parent-child, ownership, lookup) baked into the data-migration playbook and arena seeding.</li>
+</ul></div>
+<div class="wa-col"><h4>Easy</h4><span class="wa-sub">Intentional · Automated · Engaging</span><ul>
+<li><b>Automated</b> → the flow-change playbook enforces the Flow pattern table: entry criteria, subflows, no hard-coded values, Apex at volume.</li>
+<li><b>Automated</b> → no-hardcoded-ids: Well-Architected names hard-coded record/user/record-type IDs an anti-pattern in both Apex and Flow.</li>
+<li><b>Intentional</b> → /sf-architect grounds design in the real schema and automation map before any sketching.</li>
+</ul></div>
+<div class="wa-col"><h4>Adaptable</h4><span class="wa-sub">Resilient · Composable</span><ul>
+<li><b>Resilient - ALM</b> → metadata-is-code: source-driven development with the CLI; org-based development named an anti-pattern. Tests automated on source changes.</li>
+<li><b>Resilient - Testing</b> → test-real-transactions plus deploy validate as the pre-merge proof.</li>
+<li><b>Composable</b> → automation placement (Flow vs Apex) decided on packageability and testability, per the framework's own guidance.</li>
+</ul></div>
+</div>
+<div class="prose">
+<p>The deepest alignment is philosophical. Well-Architected's anti-pattern tables describe how Salesforce solutions get sick; pstack is a system for keeping engineering healthy at agent speed. sfstack fuses them: the <code>/sf-interrogate</code> skill ships the Well-Architected pattern/anti-pattern checklists as a reference file, so every adversarial review literally runs the framework's own criteria against the diff. Architects don't have to trust the conversion - they can watch the agent apply Salesforce's own document.</p>
+</div>
+<p class="srcnote">Framework: <a href="https://architect.salesforce.com/well-architected/overview">Salesforce Well-Architected</a> - <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/trusted-overview">Trusted</a>, <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/easy-overview">Easy</a>, <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/adaptable-overview">Adaptable</a>. Pattern tables cited from the <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/reliable">Reliable</a>, <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/automated">Automated</a>, and <a href="https://architect.salesforce.com/docs/architect/well-architected/guide/resilient">Resilient</a> guides (read September 11, 2026).</p>
+</div></section>
+
+<section class="section" id="honest"><div class="wrap"><div class="ghost">07</div>
+<div class="chap">The fine print, on purpose</div>
+<h2>Honest limitations &amp; prior art</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>A conversion that hides its seams is marketing. These are the four places where Salesforce genuinely pushes back, and the three adjacent efforts this builds alongside.</p></div>
+<div class="prose">
+<p><b>Limitation 1 - the UI is the hard part.</b> pstack's home turf is an Electron app with a debug port. Lightning is a session-gated web app on someone else's cloud: driving it means browser automation with a session URL from <code>sf org open --url-only</code> (Salesforce's own <a href="https://developer.salesforce.com/docs/platform/utam/overview">UTAM</a> exists for exactly this, and LWC logic gets <a href="https://developer.salesforce.com/docs/platform/lwc/guide/unit-testing-using-jest-debug-tests.html">Jest tests</a>). It works, but it is the weakest link in the loop, and sfstack says so inside its own skills.</p>
+<p><b>Limitation 2 - the platform caps the harness.</b> DevHubs limit daily scratch org creation; orgs cap daily async executions and API calls. Fleets are budgeted resources here, not infinite ones. sfstack's swarm and arena skills check the budget first - but physics is physics.</p>
+<p><b>Limitation 3 - managed packages are partially opaque.</b> Their code is hidden, their automations still spend your transaction's CPU budget, and the dependency graph cannot see everything (dynamic references, reports, integrations). sfstack's blast-radius skill names what it cannot see instead of pretending completeness.</p>
+<p><b>Limitation 4 - async testing has sharp edges.</b> Future/queueable/batch only run inside <code>Test.startTest/stopTest</code>, tests are data-isolated by default, and setup-DML rules trip newcomers. sfstack encodes these as rules, but an agent (or human) new to the platform should expect a learning curve.</p>
+<p><b>Prior art, deliberately built alongside, not duplicated:</b> Salesforce's own <a href="https://github.com/forcedotcom/sf-skills">sf-skills</a> repo (curated agent skills for Apex, Flow, LWC generation - complementary: it teaches agents to <i>produce</i> Salesforce artifacts, sfstack is the verification and discipline layer around them), the official <a href="https://claude.com/plugins/salesforce-development">Salesforce Development plugin for Claude</a>, and Salesforce's <a href="https://www.salesforce.com/headless/agent-skills-plugins">agent skills &amp; plugins</a> hub. And credit where it is due: Lauren Tan's pstack is the blueprint - this is a conversion of her ideas, unaffiliated, MIT-licensed like the original. Her Part 3 is announced but not yet published; when it lands, this conversion gets a matching update.</p>
+</div>
+</div></section>
+
+<section class="section" id="install"><div class="wrap"><div class="ghost">08</div>
+<div class="chap">Use it</div>
+<h2>Install and first run</h2>
+<div class="takeaway"><span class="tag">The point in one line</span><p>One repo, 29 skills + 10 playbooks, MIT. Works with any tool that supports the Agent Skills spec - Claude Code, Cursor, Codex, OpenCode.</p></div>
+<div class="codelock"><span class="cm"># add the skills to your agent</span>
+<span class="cmd">npx skills add krika2810/sfstack</span>
+
+<span class="cm"># or as a Claude Code plugin</span>
+<span class="cmd">/plugin marketplace add krika2810/sfstack</span>
+<span class="cmd">/plugin install sfstack@sfstack</span>
+
+<span class="cm"># then, inside any sfdx project:</span>
+<span class="cmd">/sf-setup</span>                          <span class="cm">← checks sf CLI, DevHub, scratch def, test baseline</span>
+<span class="cmd">/sf-create-verification-skill</span>    <span class="cm">← generates your project's verify skill + Feature Map</span>
+<span class="cmd">/sf-mode fix the duplicate-contact bug</span>  <span class="cm">← first real task, with proof</span></div>
+<div class="prose">
+<p>The repo: <a href="https://github.com/krika2810/sfstack">github.com/krika2810/sfstack</a>. Everything on this site - the mapping, the principles, the Well-Architected checklists - lives there as runnable skill files, not just prose. Fork it, improve it, make it yours (that is Lauren's invitation on pstack too; MIT both times).</p>
+</div>
+</div></section>
+
+<section class="glossary"><div class="wrap">
+<div class="chap">Reference</div>
+<h2>Glossary</h2>
+<div class="glist">
+<div class="gitem"><dt>pstack</dt><dd>Lauren Tan's open-source set of agent skills for rigorous engineering, distributed as a Cursor plugin. The blueprint for sfstack.</dd></div>
+<div class="gitem"><dt>sfstack</dt><dd>This conversion: pstack's skills, principles, and playbooks rebuilt for Salesforce, plus eight Salesforce-native principles. MIT, one repo.</dd></div>
+<div class="gitem"><dt>Skill</dt><dd>A packaged set of instructions (a SKILL.md file) that teaches an agent one kind of task.</dd></div>
+<div class="gitem"><dt>Governor limits</dt><dd>Per-transaction caps Salesforce enforces on its shared runtime: 100 SOQL queries, 150 DML statements, 10s CPU, 10MB heap (synchronous). Breach = uncatchable System.LimitException.</dd></div>
+<div class="gitem"><dt>Multi-tenancy</dt><dd>Many customers share one Salesforce runtime and database. The reason governor limits exist, and why you never control the host.</dd></div>
+<div class="gitem"><dt>Scratch org</dt><dd>A disposable, source-tracked Salesforce org created from a definition file; lives up to 30 days. sfstack's unit of isolation and parallelism.</dd></div>
+<div class="gitem"><dt>sf CLI</dt><dd>Salesforce's command-line tool: create orgs, deploy metadata, run Apex and tests, query data, tail logs. The ready-made control layer.</dd></div>
+<div class="gitem"><dt>Deploy validate</dt><dd>sf project deploy validate: a check-only deployment that runs the full analysis plus tests without committing - the pre-merge proof.</dd></div>
+<div class="gitem"><dt>75% test gate</dt><dd>Production deployments require at least 75% org-wide Apex test coverage, passing. A floor, not a target.</dd></div>
+<div class="gitem"><dt>Metadata-driven deployment</dt><dd>Salesforce customizations (Apex, objects, Flows, layouts) are XML source, deployed as a set. "Metadata is code" follows from this.</dd></div>
+<div class="gitem"><dt>Order of execution</dt><dd>The fixed sequence Salesforce runs triggers, Flows, validation rules, and commits in one transaction. Recursive and overlapping - the cause of many "impossible" bugs.</dd></div>
+<div class="gitem"><dt>Well-Architected</dt><dd>Salesforce's framework for healthy solutions: Trusted, Easy, Adaptable, with prescriptive patterns and anti-patterns per topic.</dd></div>
+<div class="gitem"><dt>Verification skill</dt><dd>The project-local skill sfstack generates: launch/doctor/drive/evidence/cleanup for your org, plus a Feature Map of user-facing features.</dd></div>
+<div class="gitem"><dt>Feature Map</dt><dd>Markdown catalog of a project's features: what each does, how a user reaches it, how to drive it with sf + browser, and the gotchas.</dd></div>
+<div class="gitem"><dt>CRUD/FLS</dt><dd>Object- and field-level permissions. Apex ignores them by default (system mode), so agents must enforce them deliberately.</dd></div>
+<div class="gitem"><dt>Bulkification</dt><dd>Writing all data operations against collections instead of single records. Necessary - but not sufficient for large data volumes.</dd></div>
+</div>
+</div></section>
+
+<div class="footer"><div class="wrap">
+<p>SF Stack - a conversion of <a href="https://x.com/poteto">Lauren Tan</a>'s <a href="https://github.com/cursor/plugins/tree/main/pstack">pstack</a> for the Salesforce platform. Concept credit: Lauren Tan (pstack, MIT). Salesforce conversion, research, and this site: Krishnamurthy KA, built with Instinct. Not affiliated with Lauren Tan, Cursor, or Salesforce. Platform facts cited from architect.salesforce.com and developer.salesforce.com, read September 11, 2026. Product claims from the original author (e.g. the 100-1000x multiplier) are hers, not independently verified here.</p>
+</div></div>
+<script>
+// theme toggle
+(function(){
+  var root=document.documentElement, button=document.querySelector('.theme-toggle');
+  function render(){var light=root.dataset.theme==='light';button.setAttribute('aria-pressed',String(light));button.setAttribute('aria-label',light?'Switch to dark mode':'Switch to light mode');button.querySelector('.theme-icon').textContent=light?'☾':'☀';button.querySelector('.theme-label').textContent=light?'DARK':'LIGHT';}
+  button.addEventListener('click',function(){var next=root.dataset.theme==='light'?'dark':'light';root.dataset.theme=next;root.style.colorScheme=next;try{localStorage.setItem('sfstack-theme',next)}catch(e){}render();});
+  render();
+})();
+// progress bar
+window.addEventListener('scroll',function(){var h=document.documentElement;var p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;document.getElementById('progress').style.width=p+'%';});
+// tooltips on touch
+document.querySelectorAll('.term').forEach(function(t){t.addEventListener('click',function(e){e.stopPropagation();t.classList.toggle('open');});});
+document.addEventListener('click',function(){document.querySelectorAll('.term.open').forEach(function(t){t.classList.remove('open');});});
+
+// 1. governor limit explorer
+var LIMS=[
+ {k:'SOQL queries',n:'100 sync / 200 async',d:'per transaction. Every query counts, including ones inside Flows and managed-package code that fires in your transaction. Design rule: collections in, collections out - never a query inside a loop.'},
+ {k:'Rows retrieved',n:'50,000',d:'records per transaction across all SOQL. Design rule: query only the fields and rows you need; large reads belong in batch Apex where the counter resets per batch.'},
+ {k:'DML statements',n:'150',d:'insert/update/delete calls per transaction. Design rule: accumulate records into lists and save once. A DML inside a loop is the classic Salesforce bug shape.'},
+ {k:'DML rows',n:'10,000',d:'records written per transaction. Past this, the design is batch Apex or Bulk API 2.0 - bulkification alone does not make you large-data-volume safe (Well-Architected says exactly this).'},
+ {k:'Callouts',n:'100 / 120s',d:'HTTP callouts per transaction, 120 seconds of cumulative timeout. Design rule: DML before callout is illegal in one transaction, so integrations run async (queueable) by default.'},
+ {k:'Heap',n:'10 MB sync / 25 MB async',d:'memory per transaction. Design rule: stream large datasets, avoid SELECT-every-field, and remember heap and CPU interact - big heaps make the CPU check slower.'},
+ {k:'CPU time',n:'10s sync / 60s async',d:'on Salesforce application servers, shared by your Apex, Flows, workflows, and managed packages in the same transaction. Design rule: your budget is never fully yours - measure whole transactions.'},
+ {k:'Transaction ceiling',n:'10 minutes',d:'maximum wall-clock execution per transaction, no matter what. Long work is not a bigger transaction; it is a chain of small ones.'},
+ {k:'Async executions',n:'250,000+ / 24h',d:'org-wide daily cap on async Apex (or 200 x licenses, whichever is greater). Design rule: org-level limits gate the harness too - fleets of agents must budget, exactly like scratch org creation.'}
+];
+var lc=document.getElementById('limchips'),ld=document.getElementById('limdetail');
+LIMS.forEach(function(l,i){var b=document.createElement('button');b.className='chip';b.textContent=l.k;b.onclick=function(){lc.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');ld.innerHTML='<span class="dnum">'+l.n+'</span><b>'+l.k+'</b> — '+l.d;};lc.appendChild(b);});
+
+// 2. sf control layer explorer
+var SFCATS=['launch','drive','observe','teardown'];
+var SFCMDS={
+ 'org create scratch':{c:'launch',d:'Creates a disposable org from config/project-scratch-def.json in seconds. The agent\'s clean room: one per task, per experiment, per parallel worker.'},
+ 'project deploy start':{c:'launch',d:'Pushes your source into the org asynchronously and reports a deployment ID. That ID goes into the evidence bundle - it is how a reviewer re-checks what shipped.'},
+ 'data import tree':{c:'launch',d:'Seeds related records (accounts with contacts, etc.) from JSON so every verification run starts from the same realistic data.'},
+ 'org assign permset':{c:'launch',d:'Grants the verification user the permissions the feature needs. Permission-dependent bugs reproduce only when the setup matches production.'},
+ 'data query':{c:'drive',d:'Runs SOQL from the command line. The agent\'s eyes on record state - before the action, after the action, and for side-effect checks. --tooling-api reaches the metadata dependency graph.'},
+ 'data update record / create record':{c:'drive',d:'Writes records directly, the way an integration or a test would. How the agent triggers the automation it is verifying.'},
+ 'apex run':{c:'drive',d:'Executes anonymous Apex from a file: invoke entry points, run batches synchronously, print Limits telemetry for the evidence bundle.'},
+ 'api request rest':{c:'drive',d:'Calls any REST endpoint on the org - how the agent exercises custom APIs the way a real integration would.'},
+ 'org open --url-only':{c:'drive',d:'Mints a frontdoor session URL. Feed it to a browser-automation harness and the agent can drive Lightning pages like a user - clicks, screenshots, proof.'},
+ 'apex run test':{c:'observe',d:'Runs Apex tests with coverage and returns a test-run ID. The deploy gate and the regression net, on demand. Remember: green tests are necessary, not sufficient.'},
+ 'apex tail log / get log':{c:'observe',d:'Streams and fetches debug logs (needs a trace flag on). The platform\'s console - where order-of-execution mysteries actually get solved.'},
+ 'limits api display':{c:'observe',d:'Shows the org\'s current daily-limit consumption. The agent\'s fuel gauge before fanning out a swarm or a big data run.'},
+ 'sobject describe':{c:'observe',d:'Full schema for any object: fields, types, relationships, record types. Ground truth for design work - the agent interviews the org, not its own assumptions.'},
+ 'project deploy report':{c:'observe',d:'Status and results of an async deployment. The receipt for every ship.'},
+ 'org delete scratch':{c:'teardown',d:'Deletes the throwaway org. Cleanup removes the environment, never the evidence - proof artifacts live in the repo, named in the skill.'}
+};
+var sc=document.getElementById('sfcats'),sk=document.getElementById('sfchips'),sd=document.getElementById('sfdetail');
+function renderCmds(cat){sk.innerHTML='';Object.keys(SFCMDS).forEach(function(k){if(cat!=='all'&&SFCMDS[k].c!==cat)return;var b=document.createElement('button');b.className='chip';b.textContent='sf '+k;b.onclick=function(){sk.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');sd.innerHTML='<b>sf '+k+'</b> <span style="font-family:var(--mono);font-size:11px;color:var(--purple-soft);text-transform:uppercase;letter-spacing:.1em"> · '+SFCMDS[k].c+'</span><br>'+SFCMDS[k].d;};sk.appendChild(b);});}
+['all'].concat(SFCATS).forEach(function(cat,i){var b=document.createElement('button');b.className='chip'+(i===0?' on':'');b.textContent=cat;b.onclick=function(){sc.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');renderCmds(cat);sd.textContent='Pick a command above.';};sc.appendChild(b);});
+renderCmds('all');
+// 3. verification loop simulator
+var WNODES_WITH=['YOU','AGENT','VALIDATE<small>check-only deploy + tests</small>','SCRATCH ORG<small>deploy + apex tests</small>','DRIVE UI<small>sf + browser</small>','PR + PROOF'];
+var WNODES_WITHOUT=['YOU','AGENT','YOU CHECK<small>deploy by hand</small>','YOU TEST<small>click around</small>','MAYBE PR'];
+var WLOG_WITH=[
+ ['cmd','$ sf project deploy validate --test-level RunLocalTests'],
+ ['ok','✓ validation passed - 47 tests, 0 failures, coverage 91%'],
+ ['cmd','$ sf org create scratch --alias verify-231 && sf project deploy start'],
+ ['ok','✓ deployed - deployment id 0Af...9X2'],
+ ['cmd','$ sf apex run test --json  →  test run 707...4P1'],
+ ['ok','✓ 12/12 passed · limits probe: 14/100 SOQL, 22% heap at 5k records'],
+ ['cmd','driving UI via frontdoor session... screenshot saved'],
+ ['ok','✓ badge renders, side effects verified (2 child records, 1 event)'],
+ ['cmd','$ sf org delete scratch --no-prompt  (evidence kept in .proof/)'],
+ ['ok','PR opened: validation + test-run IDs attached. Your move: review the proof.']
+];
+var WLOG_WITHOUT=[
+ ['cmd','agent: "done - deployed the fix"'],
+ ['','you: create a sandbox... wait for refresh... deploy by hand'],
+ ['','you: click through the account page... looks ok?'],
+ ['bad','✗ production next week: flow fails at 101 records in a data load'],
+ ['cmd','agent: "cannot reproduce - works on my seed data"'],
+ ['','you: read debug logs at 11pm, paste them back to the agent'],
+ ['bad','✗ third round-trip. you are the verification layer.'],
+ ['','...repeat for every change, forever.']
+];
+var wmode='with', wrun=false;
+var wbw=document.getElementById('wwithout'),wbt=document.getElementById('wwith'),wr=document.getElementById('wrun'),wl=document.getElementById('lloop'),wn=document.getElementById('lnote'),wg=document.getElementById('llog');
+function drawNodes(){wl.innerHTML='';var nodes=wmode==='with'?WNODES_WITH:WNODES_WITHOUT;nodes.forEach(function(n,i){var d=document.createElement('div');d.className='lnode';d.id='ln'+i;d.innerHTML=n;wl.appendChild(d);if(i<nodes.length-1){var a=document.createElement('span');a.className='larrow';a.textContent='→';wl.appendChild(a);}});}
+wbw.onclick=function(){wmode='without';wbw.classList.add('on');wbt.classList.remove('on');drawNodes();wg.textContent='The run log will appear here.';wn.textContent='';};
+wbt.onclick=function(){wmode='with';wbt.classList.add('on');wbw.classList.remove('on');drawNodes();wg.textContent='The run log will appear here.';wn.textContent='';};
+wr.onclick=function(){
+ if(wrun)return; wrun=true; drawNodes(); wg.innerHTML='';
+ var lines=wmode==='with'?WLOG_WITH:WLOG_WITHOUT;
+ var nodes=wmode==='with'?WNODES_WITH:WNODES_WITHOUT;
+ wn.textContent=wmode==='with'?'↩ if any check fails, the agent fixes and re-runs - no human needed':'↩ every failure routes back through you';
+ var step=0, nodeIdx=0;
+ function lit(i){var el=document.getElementById('ln'+i); if(el)el.classList.add('lit');}
+ function done(i){var el=document.getElementById('ln'+i); if(el){el.classList.remove('lit');el.classList.add('done');}}
+ function tick(){
+   if(step>=lines.length){
+     if(wmode==='with'){done(nodeIdx);} 
+     wrun=false; return;
+   }
+   var l=lines[step];
+   var div=document.createElement('div');
+   div.className=l[0]; div.textContent=l[1]; wg.appendChild(div); wg.scrollTop=wg.scrollHeight;
+   if(wmode==='with'){
+     var map=[2,2,3,3,3,4,4,4,5,5];
+     var ni=map[step]||0;
+     if(ni!==nodeIdx){done(nodeIdx);nodeIdx=ni;}
+     lit(nodeIdx);
+   } else {
+     var map=[0,2,2,3,1,3,4,4];
+     var ni=map[step]||0;
+     if(ni!==nodeIdx){done(nodeIdx);nodeIdx=ni;}
+     lit(nodeIdx);
+   }
+   step++; setTimeout(tick, 900);
+ }
+ tick();
+};
+drawNodes();
+// 4. mapping table
+var MAP=[
+ // core skills
+ ['poteto-mode','sf-mode','port','Sticky mode + playbook routing kept; adds Salesforce prime directives: limits are uncatchable, metadata is code, source-driven only, access is explicit.'],
+ ['setup-pstack','sf-setup','port','Checks sf CLI, DevHub auth, scratch org definition, and the test baseline - instead of picking models, it grounds the environment.'],
+ ['create-verification-skill','sf-create-verification-skill','port','The centerpiece, translated: launch = scratch org + deploy; drive = sf data/apex + browser session; evidence = deployment IDs, test-run IDs, debug logs, screenshots; seeds a metadata-aware Feature Map.'],
+ ['maintain-verification-skill','sf-maintain-verification-skill','port','Re-grounds the Feature Map in current metadata source; one live drive per correction; at most one PR of proven fixes.'],
+ ['how','sf-how','port','Traces runtime the Salesforce way: automation map, order of execution, real debug logs from a scratch org.'],
+ ['why','sf-why','port','Adds the setup audit trail - changes made outside source control are evidence and a red flag.'],
+ ['teach','sf-teach','port','Same how+why weave; explains data model first, then automations, then the transaction story.'],
+ ['recall','sf-recall','port','Adds live org state: what is actually deployed where wins over remembered state.'],
+ ['architect','sf-architect','port','Five phases kept. Ground = schema + automations + data volumes. Scrap signals translated: repeated limit workarounds, recursion-guard creep, sharing bypasses.'],
+ ['arena','sf-arena','port','Each candidate gets its own scratch org; measured with the verify skill + Limits telemetry at seeded volume.'],
+ ['swarm','sf-swarm','port','The fleet is scratch orgs, budgeted against the DevHub daily cap before launch.'],
+ ['interrogate','sf-interrogate','port','Seven Salesforce lenses (bulk safety, queries, security, transactions, tests, metadata, deploy risk); ships the Well-Architected checklists as its reference file.'],
+ ['blast-radius','sf-blast-radius','port','Runs on the metadata dependency graph (Tooling API) + source grep + runtime dependents; explicitly names what the graph cannot see.'],
+ ['tdd','sf-tdd','port','Real transaction semantics: Test.startTest/stopTest, data factories, no SeeAllData, 1-record and 200-record tests.'],
+ ['show-me-your-work','sf-show-me-your-work','port','Same TSV decision trail; the evidence column gains deployment IDs and test-run IDs.'],
+ ['reflect','sf-reflect','port','Adds a platform pass: every limit, order-of-execution, or deployment surprise routes to a skill edit.'],
+ ['figure-it-out','sf-figure-it-out','port','Adds environment budgeting: scratch orgs and DevHub caps are planned before the run starts.'],
+ ['technical-writing','sf-technical-writing','port','Diataxis + Google style unchanged; Salesforce terms defined on first use.'],
+ ['unslop','sf-unslop','port','Unchanged - AI tells out of docs, PRs, and replies.'],
+ ['bro','sf-bro','port','Unchanged - plain-language restatement, Salesforce jargon edition.'],
+ ['typescript-best-practices','—','skip','Salesforce speaks Apex, not TypeScript. Replaced by the eight Salesforce-native principles below.'],
+ ['automate-me','—','skip','Tool-agnostic; use it from upstream pstack as-is.'],
+ ['make-bot-ui','—','skip','Specific to Lauren\'s Grok Bot; no honest Salesforce analog to force.'],
+ ['no-comments','—','skip','Language-agnostic; use it from upstream pstack as-is.'],
+ ['—','sf-deploy','new','No upstream analog: validate-first shipping for metadata deployments (check-only deploy + tests, then deploy, evidence kept, rollback written down first).'],
+ // principles
+ ['23 engineering principles','carried in sf-mode','carry','All of them apply verbatim (prove-it-works, fix-root-causes, build-the-lever, laziness-protocol, sequence-verifiable-units, and the rest); sf-mode indexes them next to the native ones.'],
+ ['—','8 SF-native principles','new','bulkify-by-default · selective-queries · respect-the-shared-runtime · test-real-transactions · metadata-is-code · enforce-access-explicitly · async-for-volume · no-hardcoded-ids. Each cites Well-Architected or the Apex docs.'],
+ // playbooks
+ ['investigation (playbook)','investigation','port','Read-only, evidence-first; writes nothing.'],
+ ['bug-fix (playbook)','bug-fix','port','Reproduce in a scratch org first; root-cause with the order of execution in view.'],
+ ['perf-issue (playbook)','perf-issue','port','Throughput mindset from Well-Architected: query plan, selectivity, async, Platform Cache - measured before/after.'],
+ ['feature (playbook)','feature','port','Data model first, access designed, automation placement deliberate, Feature Map updated.'],
+ ['prototype (playbook)','folded into sf-arena','folded','Competing prototypes in separate scratch orgs are the arena.'],
+ ['hillclimb (playbook)','folded into perf-issue','folded','Sustained metric improvement = the perf loop with baselines.'],
+ ['runtime-forensics (playbook)','folded into bug-fix','folded','Live-symptom diagnosis happens through debug logs in a scratch org.'],
+ ['trace-forensics (playbook)','folded into perf-issue','folded','Captured-artifact analysis = debug log + Limits telemetry review.'],
+ ['refactoring (playbook)','folded into feature','folded','Behavior-preserving change = verifiable units with the same drives green before and after.'],
+ ['visual-parity (playbook)','—','skip','Lightning UI equivalence is covered by verification-drive screenshots; no separate port.'],
+ ['authoring-a-skill (playbook)','—','skip','Skill-authoring meta-work; use upstream pstack.'],
+ ['eval (playbook)','—','skip','Skill-evaluation meta-work; use upstream pstack.'],
+ ['babysit (playbook)','folded into sf-deploy','folded','Watching a PR to mergeable = watching validations and deployments to done.'],
+ ['shipping (playbook)','sf-deploy','port','Grew into a full skill: validate-first, evidence bundle, post-deploy smoke, rollback pre-written.'],
+ ['autonomous-run (playbook)','autonomous-run','port','Adds the environment budget: an unattended run that exhausts its scratch org quota at hour three is a failure mode.'],
+ ['orchestrate (playbook)','folded into autonomous-run','folded','Standing multi-day coordination = autonomous-run with checkpoints.'],
+ ['autopilot-full (playbook)','folded into autonomous-run','folded','Same unattended-landing pattern.'],
+ ['autopilot-stack (playbook)','folded into autonomous-run','folded','Same unattended-landing pattern.'],
+ ['session-pickup (playbook)','carried in autonomous-run','carry','Checkpoint files + decision TSV make runs resumable.'],
+ ['pause-safely (playbook)','carried in autonomous-run','carry','Same checkpoint mechanism.'],
+ ['multi-phase-plan (playbook)','multi-phase-plan','port','Every task structured around proof; tests alone never count as proof.'],
+ ['worktree-cleanup (playbook)','—','skip','Scratch orgs delete themselves; teardown is one CLI command.'],
+ ['opening-a-pr (playbook)','opening-a-pr','port','Small commits, briefing body, evidence attached, Feature Map updated.'],
+ ['—','deploy (playbook)','new','The production path: human-owned windows, destructive manifests reviewed line by line.'],
+ ['—','data-migration (playbook)','new','Bulk API 2.0, the 10k skew rules, off-peak sorted loads, rehearsal in Full sandbox.'],
+ ['—','flow-change (playbook)','new','Declarative changes get the full rigor: entry criteria, blast-radius, bulk tests, activation state named.']
+];
+var MF=[['all','All'],['port','Ported'],['new','New in sfstack'],['carry','Carried'],['folded','Folded in'],['skip','Not ported']];
+var mbody=document.getElementById('mbody'),msearch=document.getElementById('msearch'),mchips=document.getElementById('mfilters'),mcount=document.getElementById('mcount');
+var mstate={f:'all',q:''};
+function badge(s){var m={port:['port','PORT'],new:['new','NEW'],carry:['carry','CARRIED'],folded:['carry','FOLDED'],skip:['skip','SKIP']};var b=m[s];return '<span class="badge '+b[0]+'">'+b[1]+'</span>';}
+function drawMap(){
+ mbody.innerHTML='';var shown=0;
+ MAP.forEach(function(r){
+   if(mstate.f!=='all'&&r[2]!==mstate.f)return;
+   var hay=(r[0]+' '+r[1]+' '+r[2]+' '+r[3]).toLowerCase();
+   if(mstate.q&&hay.indexOf(mstate.q)===-1)return;
+   shown++;
+   var tr=document.createElement('tr');
+   tr.innerHTML='<td>'+r[0]+'</td><td style="color:var(--ink)">'+r[1]+'</td><td>'+badge(r[2])+'</td><td>'+r[3]+'</td>';
+   mbody.appendChild(tr);
+ });
+ mcount.textContent='Showing '+shown+' of '+MAP.length+' rows · upstream verified against cursor/plugins/pstack, Sep 2026 (47 skills + 23 playbooks)';
+}
+MF.forEach(function(f,i){var b=document.createElement('button');b.className='chip'+(i===0?' on':'');b.textContent=f[1];b.onclick=function(){mchips.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');mstate.f=f[0];drawMap();};mchips.appendChild(b);});
+msearch.addEventListener('input',function(){mstate.q=msearch.value.toLowerCase().trim();drawMap();});
+drawMap();
+// 5. principle flip cards
+var FLIPS=[
+ ['Bulkify by default','Every data operation on collections; never single-record paths. Trigger code assumes 200 records from line one.','Well-Architected names DML/SOQL in loops and single-record operations anti-patterns. Corollary: bulkification is necessary but NOT sufficient at volume - past per-transaction limits the design is batch Apex or Bulk API 2.0.'],
+ ['Selective queries','Positive operators, named fields only, no LIMIT 1, no ALL ROWS, no leading-wildcard LIKE.','Straight from the Well-Architected performance table. Selectivity is judged at production volume, not scratch-org seed data - check the query plan when it matters.'],
+ ['Respect the shared runtime','Governor limits are uncatchable. Budget before building; probe with the Limits class while verifying.','System.LimitException cannot be try/caught - prevention is the only strategy. CPU and heap are shared with Flows and managed packages in the same transaction. Source: Apex Governor Limits doc.'],
+ ['Test real transactions','Test.startTest/stopTest for async, data factories, no SeeAllData, assert outcomes - and tests alone are still not verification.','The 75% coverage rule is a deployment floor, not a target. Proof means the behavior ran in a real org with evidence; tests are how it stays proven.'],
+ ['Metadata is code','Flows, validation rules, objects: version-controlled, reviewed, tested, deployed. Never org-based development.','Well-Architected Resilient/ALM names org-based development an anti-pattern. Audit-trail entries with no source counterpart are defects.'],
+ ['Enforce access explicitly','CRUD/FLS and sharing chosen deliberately: with sharing, stripInaccessible, no silent escalation.','Trusted is the first pillar. Apex runs in system mode by default - guest-user and integration paths get line-by-line review.'],
+ ['Async for volume','Queueable, batch, Bulk API 2.0 - sized to the data, latency tradeoffs stated, failure handling designed.','Well-Architected throughput guidance favors async where latency allows. Org-level daily async caps are real; spend them deliberately.'],
+ ['No hardcoded IDs','No record, user, or record-type IDs in Apex or Flow - they break (or worse, silently mis-point) in every other org.','Named a Well-Architected anti-pattern in both Apex and Flow. Record types by DeveloperName, config in custom metadata, URLs from Url.getOrgDomainUrl().']
+];
+var fg=document.getElementById('flipgrid');
+FLIPS.forEach(function(f){
+ var d=document.createElement('div');d.className='flip';
+ d.innerHTML='<div class="flip-in"><div class="ff"><h4>'+f[0]+'</h4><p>'+f[1]+'</p><span class="flip-hint">click to flip · the grounding</span></div><div class="ff backf"><p>'+f[2]+'</p><span class="flip-hint">click to flip back</span></div></div>';
+ d.onclick=function(){d.classList.toggle('flipped');};
+ fg.appendChild(d);
+});
+</script>
+</body>
+</html>

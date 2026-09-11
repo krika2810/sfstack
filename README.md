@@ -22,7 +22,7 @@ What genuinely changes in a governed, multi-tenant runtime:
 
 ## What's in the box
 
-**29 skills** (21 core + 8 Salesforce-native principles) **+ 10 playbooks.**
+**52 skills** (21 core + 8 Salesforce-native principles + 23 upstream pstack principles vendored in) **+ 10 playbooks.** Self-contained: install sfstack alone and you get everything - no separate pstack install needed.
 
 ### Core skills
 
@@ -63,6 +63,12 @@ What genuinely changes in a governed, multi-tenant runtime:
 | `principle-async-for-volume` | Favor queueable/batch for volume; Bulk API 2.0 for LDV; mind latency tradeoffs. | Well-Architected: Reliable — Performance |
 | `principle-no-hardcoded-ids` | No hard-coded record, user, or record-type IDs in Apex or Flow. | Well-Architected: Easy — Automated |
 
+### Upstream pstack principles (vendored)
+
+All 23 of Lauren Tan's engineering principles ship inside this repo under `skills/principle-*`, vendored verbatim from pstack @ f5bdd68 (MIT, (c) 2026 Lauren Tan - see `NOTICE.pstack`). `/sf-mode` indexes them next to the Salesforce-native ones and reads them from the local files.
+
+`attack-the-premise` · `boundary-discipline` · `build-the-lever` · `encode-lessons-in-structure` · `exhaust-the-design-space` · `experience-first` · `fix-root-causes` · `foundational-thinking` · `guard-the-context-window` · `laziness-protocol` · `make-operations-idempotent` · `migrate-callers-then-delete-legacy-apis` · `minimize-reader-load` · `model-the-domain` · `never-block-on-the-human` · `outcome-oriented-execution` · `prove-it-works` · `redesign-from-first-principles` · `separate-before-serializing-shared-state` · `sequence-verifiable-units` · `subtract-before-you-add` · `test-behavior-not-implementation` · `type-system-discipline`
+
 ### Playbooks (inside `/sf-mode`, loaded by task type)
 
 `investigation` · `bug-fix` · `feature` · `perf-issue` · `deploy` · `data-migration` · `flow-change` · `multi-phase-plan` · `autonomous-run` · `opening-a-pr`
@@ -90,7 +96,7 @@ Then, inside any sfdx project:
 
 ## Mapping to pstack
 
-All 47 upstream pstack skills are accounted for: 20 core skills ported and adapted, 4 deliberately not ported (`typescript-best-practices` → replaced by the 8 Salesforce-native principles; `automate-me`, `make-bot-ui`, `no-comments` → tool-specific or work as-is upstream), and the 23 upstream engineering principles apply verbatim — `/sf-mode` indexes them alongside the Salesforce-native ones. The 23 upstream playbooks are represented by 10 Salesforce playbooks covering the platform's actual task shapes. Full interactive mapping table: https://sfstack.vercel.app
+All 47 upstream pstack skills are accounted for: 20 core skills ported and adapted, 4 deliberately not ported (`typescript-best-practices` → replaced by the 8 Salesforce-native principles; `automate-me`, `make-bot-ui`, `no-comments` → tool-specific or work as-is upstream), and the 23 upstream engineering principles are vendored in this repo verbatim (MIT, see `NOTICE.pstack`) — `/sf-mode` indexes them alongside the Salesforce-native ones and reads them from the local files. The 23 upstream playbooks are represented by 10 Salesforce playbooks covering the platform's actual task shapes. Full interactive mapping table: https://sfstack.vercel.app
 
 ## Prior art and credit
 

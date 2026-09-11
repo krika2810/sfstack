@@ -134,7 +134,7 @@
 <section class="section" id="mapping"><div class="wrap"><div class="ghost">04</div>
 <div class="chap">Every piece accounted for</div>
 <h2>The full mapping: all 47 pstack skills, 23 principles, 23 playbooks</h2>
-<div class="takeaway"><span class="tag">The point in one line</span><p>Verified against the live pstack repo (cursor/plugins, September 2026): 20 core skills ported and adapted, 1 new Salesforce skill added, 4 deliberately not ported, all 23 engineering principles carried, 8 Salesforce-native principles added, 23 playbooks distilled to 10. Nothing dropped silently - the skips are named with their reasons.</p></div>
+<div class="takeaway"><span class="tag">The point in one line</span><p>Verified against the live pstack repo (cursor/plugins, September 2026): 20 core skills ported and adapted, 1 new Salesforce skill added, 4 deliberately not ported, all 23 engineering principles vendored as files, 8 Salesforce-native principles added, 23 playbooks distilled to 10. Nothing dropped silently - the skips are named with their reasons.</p></div>
 <div class="prose">
 <p>A conversion you can't audit is just a rebrand. The table below is the complete inventory: every skill in the upstream repo and where it landed in sfstack. Filter it, search it, check the counts - the repo's README carries the same table.</p>
 </div>
@@ -149,7 +149,7 @@
 <section class="section" id="principles"><div class="wrap"><div class="ghost">05</div>
 <div class="chap">The discipline layer</div>
 <h2>Eight Salesforce-native principles</h2>
-<div class="takeaway"><span class="tag">The point in one line</span><p>pstack's 23 engineering principles carry over untouched. These eight are new - each one is a Salesforce platform rule the agent applies while it works, and each is grounded in Well-Architected or the Apex docs. Click a card to flip it.</p></div>
+<div class="takeaway"><span class="tag">The point in one line</span><p>pstack's 23 engineering principles carry over untouched - and ship vendored inside the repo, so a clean sfstack install has them as real files. These eight are new - each one is a Salesforce platform rule the agent applies while it works, and each is grounded in Well-Architected or the Apex docs. Click a card to flip it.</p></div>
 <div class="flipgrid" id="flipgrid"></div>
 <div class="prose">
 <p>These are not style preferences. Every one traces to a named platform behavior: the uncatchable <code>LimitException</code>, the 75% deploy gate, the recursive order of execution, per-org record IDs, the system-mode default in Apex. An agent that internalizes these stops producing the classic Salesforce failure shapes - the trigger that dies at 101 records, the flow that breaks the data load, the integration that leaks records because nobody chose a sharing mode.</p>
@@ -199,7 +199,7 @@
 <section class="section" id="install"><div class="wrap"><div class="ghost">08</div>
 <div class="chap">Use it</div>
 <h2>Install and first run</h2>
-<div class="takeaway"><span class="tag">The point in one line</span><p>One repo, 29 skills + 10 playbooks, MIT. Works with any tool that supports the Agent Skills spec - Claude Code, Cursor, Codex, OpenCode.</p></div>
+<div class="takeaway"><span class="tag">The point in one line</span><p>One repo, 52 skills + 10 playbooks, MIT - self-contained: the 23 upstream pstack principles are vendored in, so a clean install needs nothing else. Works with any tool that supports the Agent Skills spec - Claude Code, Cursor, Codex, OpenCode.</p></div>
 <div class="codelock"><span class="cm"># add the skills to your agent</span>
 <span class="cmd">npx skills add krika2810/sfstack</span>
 
@@ -385,7 +385,7 @@ var MAP=[
  ['no-comments','—','skip','Language-agnostic; use it from upstream pstack as-is.'],
  ['—','sf-deploy','new','No upstream analog: validate-first shipping for metadata deployments (check-only deploy + tests, then deploy, evidence kept, rollback written down first).'],
  // principles
- ['23 engineering principles','carried in sf-mode','carry','All of them apply verbatim (prove-it-works, fix-root-causes, build-the-lever, laziness-protocol, sequence-verifiable-units, and the rest); sf-mode indexes them next to the native ones.'],
+ ['23 engineering principles','vendored in skills/','carry','All 23 ship as real files in the repo (verbatim, MIT, (c) Lauren Tan - see NOTICE.pstack): prove-it-works, fix-root-causes, build-the-lever, laziness-protocol, sequence-verifiable-units, and the rest. sf-mode indexes them next to the native ones; no separate pstack install needed.'],
  ['—','8 SF-native principles','new','bulkify-by-default · selective-queries · respect-the-shared-runtime · test-real-transactions · metadata-is-code · enforce-access-explicitly · async-for-volume · no-hardcoded-ids. Each cites Well-Architected or the Apex docs.'],
  // playbooks
  ['investigation (playbook)','investigation','port','Read-only, evidence-first; writes nothing.'],

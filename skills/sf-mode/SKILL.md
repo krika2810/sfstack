@@ -30,7 +30,30 @@ Salesforce-native (in this plugin):
 - principle-async-for-volume - anything over small data volumes
 - principle-no-hardcoded-ids - reviewing Apex or Flow
 
-Upstream pstack principles that apply verbatim (read them from your pstack install if present, or apply by name): laziness-protocol, foundational-thinking, redesign-from-first-principles, attack-the-premise, subtract-before-you-add, minimize-reader-load, outcome-oriented-execution, experience-first, exhaust-the-design-space, build-the-lever, model-the-domain, boundary-discipline, type-system-discipline, make-operations-idempotent, migrate-callers-then-delete-legacy-apis, separate-before-serializing-shared-state, prove-it-works, fix-root-causes, test-behavior-not-implementation, guard-the-context-window, encode-lessons-in-structure, never-block-on-the-human, sequence-verifiable-units.
+Upstream pstack principles, vendored in this plugin under `skills/` (verbatim from cursor/plugins @ f5bdd68, MIT, (c) Lauren Tan - see NOTICE.pstack). Read the matching `principle-*/SKILL.md` like any other principle skill in this plugin; no separate pstack install is needed:
+- principle-attack-the-premise - before accepting the task as framed
+- principle-boundary-discipline - keeping changes inside their layer
+- principle-build-the-lever - when a tool or skill beats repeated effort
+- principle-encode-lessons-in-structure - after a mistake is understood
+- principle-exhaust-the-design-space - before settling on a design
+- principle-experience-first - choosing behavior over internals
+- principle-fix-root-causes - when a symptom fix tempts you
+- principle-foundational-thinking - reasoning from platform first principles
+- principle-guard-the-context-window - long sessions, big logs, wide reads
+- principle-laziness-protocol - refactoring or tempted to add abstraction
+- principle-make-operations-idempotent - retries, reruns, deployments
+- principle-migrate-callers-then-delete-legacy-apis - removing old paths
+- principle-minimize-reader-load - writing or renaming for readability
+- principle-model-the-domain - shaping objects and fields
+- principle-never-block-on-the-human - reversible work waiting on approval
+- principle-outcome-oriented-execution - framing work by the outcome
+- principle-prove-it-works - any claim of done
+- principle-redesign-from-first-principles - when the current design fights you
+- principle-separate-before-serializing-shared-state - concurrency and shared state
+- principle-sequence-verifiable-units - ordering a plan
+- principle-subtract-before-you-add - before adding anything
+- principle-test-behavior-not-implementation - writing or changing tests
+- principle-type-system-discipline - schema, types, and validation
 
 ## Playbooks
 

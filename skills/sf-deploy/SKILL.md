@@ -1,23 +1,61 @@
 ---
 name: sf-deploy
-description: "Validate-first shipping for Salesforce: check-only deployment with tests, then deploy, evidence kept, post-deploy smoke check. Use for /sf-deploy, 'ship this', release prep, or any sandbox-to-production move."
+description: "Validate-first shipping to sandboxes and production: check-only deploy with tests, then deploy the validated job, keep deployment and test-run IDs as evidence, and smoke-check the behavior after. Use for /sf-deploy or any push to a shared org."
 ---
 
 # sf-deploy
 
-Deployment on Salesforce is an async, transactional, gated operation - treat it as the risky part of the pipeline, not the formality at the end.
+sf-deploy is the **deploy** playbook as a standing skill: the rules and commands for getting source into a shared org safely. The one-sentence version: nothing reaches production that has not passed a check-only deploy with tests against that production org, and every deploy keeps its IDs.
 
-## Steps
+## When to use it
 
-1. **Preflight.** Clean git state; the exact source SHA named. `/sf-blast-radius` on anything deleted or retyped. Destructive changes get a line-by-line human review of the destructive manifest - no exceptions.
-2. **Validate first**: `sf project deploy validate` (check-only deploy) against the target with the right test level (`--test-level RunLocalTests` for production; RunSpecifiedTests only with a stated reason). This runs the real deployment analysis and the tests without committing the change. A validate you did not run is a deployment you have not tested.
-3. **Deploy the validated package**: quick-deploy the successful validation when the window allows, otherwise `sf project deploy start` with the same test level. Record the deployment ID.
-4. **Evidence bundle**: deployment ID, test-run ID, coverage delta, validate output. These go in the PR or release notes - they are how anyone re-checks this deploy later.
-5. **Post-deploy smoke**: one verification-skill drive of the primary user path in the target org (for production: a read-only or carefully chosen probe). Deployment success means metadata landed; smoke means the system works.
-6. **Rollback plan before you need it**: the previous source SHA and the redeploy command, written down before step 3. Rollback on Salesforce is a redeploy - there is no undo button.
+- Any deploy to a sandbox, staging, or production org.
+- Destructive changes of any kind.
+- Quick-deploying a validated change.
 
-## Rules
+## The steps
 
-- Never deploy to production outside the agreed window; never deploy on a Friday afternoon unless the human explicitly owns that call.
-- If validate fails, the failure is the work: fix and re-validate. Do not "try the deploy anyway" - the same gate stops it, now with users watching.
-- Org differences (data, managed package versions, enabled features) are the classic validate-green/deploy-red cause. Note known deltas between source and target in the evidence bundle.
+1. **Freeze the deploy set.** The source directory or manifest, confirmed with `git status`. Nothing rides along untracked.
+2. **Prove green in a scratch org.**
+   ```bash
+   sf apex run test --test-level RunLocalTests --target-org ci --result-format human --wait 20 --code-coverage
+   ```
+3. **Validate against the target.** The check-only deploy runs everything against the real org without committing:
+   ```bash
+   sf project deploy validate --source-dir force-app --target-org prod --test-level RunLocalTests
+   ```
+   Keep the validation job ID (`0Af...`). Reference: https://developer.salesforce.com/docs/platform/salesforce-cli-reference/guide/cli_reference_project_deploy_validate.html
+4. **Fix and revalidate** until validation is clean. Fixes happen in source, never in the target org.
+5. **Deploy.** Quick-deploy the validated job, or run the full deploy for non-production targets:
+   ```bash
+   sf project deploy quick --job-id 0Afxx0000000001 --target-org prod
+   sf project deploy start --source-dir force-app --target-org staging
+   ```
+   Production deploys require the user's explicit confirmation first. Record the deployment ID.
+6. **Smoke check.** Drive the critical behavior once in the target org and capture the evidence.
+7. **Report the IDs**: validation job ID, deployment ID, test-run ID, smoke-check evidence.
+
+## Salesforce details worth knowing
+
+- **Production gates.** Deploying to production requires at least 75% org-wide Apex coverage with all tests passing, and every trigger needs some coverage. Validation runs these gates for free, which is why validate-first works. Reference: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_intro_writing_tests.htm
+- **Destructive changes** ship via a destructive manifest and deserve their own validation and a **sf-blast-radius** pass first:
+  ```bash
+  sf project deploy start --destructive-manifest destructiveChanges.xml --target-org staging
+  ```
+- **Flow versions.** A deployed flow lands as a new version and may need activation; verify which version is active afterward.
+- **Async deploys.** Long deploys run async (`--async`); poll with `sf project deploy report --job-id 0Af... --target-org prod`.
+
+## Gotchas and failure modes
+
+- **Managed-package test failures.** `RunAllTestsInOrg` runs managed-package tests that fail for reasons unrelated to you. Know your failures from theirs before choosing the test level.
+- **Partial deploys.** A class without its test, or metadata without its dependencies, leaves a state the repo never described. Deploy coherent units.
+- **Validation expires.** A validated job can go stale as the target org changes. Revalidate if the org moved since step 3.
+- **"Deploy succeeded" is not "feature works".** Metadata validity and behavior are different claims. Step 6 exists because of this.
+
+## Proof it worked
+
+The four IDs and the smoke-check evidence, named in the reply. A deploy without its evidence pack is treated as unverified work.
+
+## Reply
+
+What shipped, where, the IDs, smoke-check evidence, and anything deferred.

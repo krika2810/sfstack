@@ -1,22 +1,48 @@
 ---
 name: sf-arena
-description: "Spawn N parallel candidate solutions to the same design or implementation task, each in its own scratch org, measure them with the verification skill, and graft the strongest parts of the losers into the winner. Use for /sf-arena, 'arena this', or comparing competing designs with evidence instead of debate."
+description: "Compete N designs or implementations against each other, each in its own scratch org, and let measured evidence pick the winner. Use for /sf-arena, contested designs, or when two approaches both look right and arguing is cheaper than measuring."
 ---
 
 # sf-arena
 
-Never accept the first design. Never debate designs abstractly either - on Salesforce, candidates are cheap to make real because scratch orgs are disposable.
+Some design questions cannot be settled by reading. Will the trigger handler pattern or the domain class pattern stay cleaner as this object grows? Does the queueable chain beat the batch job for this workload? sf-arena settles them the Salesforce way: every candidate gets its own scratch org, the same workload runs against each, and the numbers decide.
 
-## Steps
+## When to use it
 
-1. **Frame the task precisely**: the same prompt, the same Phase A grounding, the same acceptance criteria for every candidate. 2-3 candidates is usually right.
-2. **One scratch org per candidate.** Each runner launches its own org (verification skill's Launch), implements its candidate, and proves it with the same drives and measurements. Parallel by default. Check the DevHub daily scratch org cap first and stagger if needed - the cap is a hard limit, not a suggestion.
-3. **Measure the same things for every candidate**: Apex test results and coverage, Limits telemetry from instrumented runs (SOQL count, heap, CPU at realistic volume - seed enough data to make limits honest), deployment time, and for UI work, screenshots and interaction timings.
-4. **Pick a base, graft the winners' parts.** The verdict is a short evidence table, not an essay. Losers' orgs are deleted; their best ideas are not.
-5. **Record the decision** in the show-me-your-work trail: what won, why, with the numbers.
+- Two or more structurally different designs for the same problem, both defensible.
+- A performance claim that reading cannot settle ("this query will be fine at volume").
+- Choosing between automation placements: flow vs trigger vs async for the same behavior.
 
-## Rules
+## The steps
 
-- Throwaway means throwaway: candidate code that lost does not linger "just in case".
-- If every candidate fails the same acceptance criterion, the criterion or the framing is wrong - reframe before re-running.
-- Seeded data volume must be stated and identical across candidates. A design that wins on 10 records and dies on 10,000 is a trap.
+1. **Write the contest question in one sentence.** "Which design keeps Order sync under the 10-second CPU limit at 200-record batches?" Everything below serves that sentence.
+2. **Define the workload and the metric before building anything.** The workload: which records, how many, through which path (UI save, Apex script, Bulk API load). The metric: CPU time from `LIMIT_USAGE_FOR_NS`, SOQL count, wall time, test suite duration, or diff size for maintainability contests. A contest without a pre-agreed metric is a debate with extra steps.
+3. **Give each candidate its own scratch org.**
+   ```bash
+   sf org create scratch --definition-file config/project-scratch-def.json --alias arena-a --duration-days 3
+   sf org create scratch --definition-file config/project-scratch-def.json --alias arena-b --duration-days 3
+   ```
+   Deploy each candidate to its org. Isolation is the point: no shared state, no cross-contamination, and cleanup is `sf org delete scratch`.
+4. **Run the same workload against each org.** Same seed data, same script, same measurement:
+   ```bash
+   sf apex run --file workload.apex --target-org arena-a
+   sf apex tail log --target-org arena-a   # capture LIMIT_USAGE_FOR_NS
+   ```
+5. **Compare and pick.** Lay the numbers side by side. Pick the winner on the metric; break ties toward the simpler design (**principle-subtract-before-you-add**). Write down why the loser lost in one sentence.
+6. **Graft, do not restart.** The winner proceeds. If the loser had one genuinely better part, graft that part onto the winner deliberately instead of blending both designs.
+7. **Clean up.** Delete the arena orgs. DevHub active-org caps are real, and arena orgs multiply fast.
+
+## Gotchas and failure modes
+
+- **Unequal workloads.** Different seed data or a different script per org invalidates the contest. Step 4 runs the identical artifact everywhere.
+- **Measuring the wrong thing.** Developer convenience is a real metric for maintainability contests, but measure it (lines changed to add a case, cyclomatic shape of the diff) instead of asserting it.
+- **Volume fakery.** A performance contest on 50 records proves nothing about 200-record trigger batches or million-row tables. Load representative volume with Bulk API 2.0 first.
+- **Org caps.** Each DevHub caps daily creations and active scratch orgs. Keep arenas small (two or three candidates) and delete as you go.
+
+## Proof it worked
+
+The contest question, the pre-agreed metric, the per-org measurements with their org aliases and log excerpts, and the winning decision with the one-sentence reason the loser lost.
+
+## Reply
+
+Question, metric, numbers per candidate, winner, and the graft decision.

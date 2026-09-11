@@ -1,17 +1,55 @@
 ---
 name: principle-respect-the-shared-runtime
-description: "Apply to any Apex transaction design. Governor limits are uncatchable - System.LimitException cannot be try/caught - so prevent breaches by design, probe headroom with the Limits class, and treat CPU/heap as a budget shared with every managed package and Flow in the transaction."
+description: "Apply to any Apex transaction design. Governor limits are uncatchable: a breach kills the transaction with System.LimitException and no try/catch recovers it. Design so limits are never approached; probe headroom with the Limits class."
 ---
 
 # Respect the shared runtime
 
-Your code does not run on your machine. Every transaction shares a governed runtime with the platform, managed packages, Flows, and other tenants' noise - and the limits are enforced by killing the transaction with an **uncatchable** `System.LimitException`. No try/catch, no finally, no recovery. Prevention is the only strategy.
+Salesforce is multi-tenant: your code shares a runtime with every other customer on the pod, so the platform enforces per-transaction governor limits. The critical fact is not the numbers; it is the enforcement. A breached limit throws `System.LimitException`, which cannot be caught. Your transaction dies mid-work, with whatever partial state that implies. You do not handle limit breaches. You design so they never happen.
 
-The budget (synchronous): 100 SOQL queries, 50,000 rows retrieved, 150 DML statements / 10,000 rows, 100 callouts with 120s total timeout, 10 MB heap, 10 seconds CPU, 10-minute transaction ceiling. Async doubles some budgets (200 SOQL, 25 MB heap, 60s CPU) - one reason principle-async-for-volume exists.
+## When it applies
 
-Design rules that follow:
+Every Apex transaction design: triggers, batch, queueable, invocable actions, web services, and every flow, because flows share the same transaction budget as the Apex around them.
 
-- **Budget before you build**: for any path that touches data at volume, estimate SOQL/DML/heap per record times batch size before writing the loop.
-- **Probe at runtime**: `Limits.getQueries()` / `Limits.getLimitQueries()` (and the heap/CPU equivalents) in instrumented verification runs - publish the headroom in your evidence. "It passed" without numbers is not proof at volume.
-- **CPU is shared**: platform code, managed packages, and Flows all spend the same 10 seconds. Tight Apex can still die to a chatty managed package - measure the whole transaction in the verification drive.
-- **The org has limits too**: daily async executions, concurrent long-running transactions, API calls, and DevHub scratch org creation. Designs that assume unlimited async or unlimited scratch orgs fail at the org boundary, not the transaction boundary.
+## The numbers that shape design
+
+Synchronous / asynchronous per-transaction (current documented values):
+
+- SOQL queries: 100 / 200
+- Records retrieved by SOQL: 50,000
+- DML statements: 150
+- Records processed by DML: 10,000
+- Heap: 10 MB / 25 MB
+- CPU time: 10 seconds / 60 seconds
+- Callouts: 100 per transaction, 120 seconds cumulative timeout
+- Trigger batch size: 200 records
+
+Org-wide: 250,000 async Apex executions per 24 hours (or 200 per license, whichever is greater). Full table, which changes over time: Execution Governors and Limits, https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_gov_limits.htm
+
+## The rules
+
+1. **Design to the limit, not around the exception.** Before writing the transaction, count its worst-case queries, DML rows, and CPU at real batch size. If the count is near the limit, the design is wrong, not unlucky.
+2. **Probe headroom when unsure.** The `Limits` class reports usage and ceilings at runtime:
+   ```apex
+   if (Limits.getQueries() > Limits.getLimitQueries() - 10) {
+       // stop enqueueing more work in this transaction
+   }
+   ```
+   Use it for adaptive batching and for asserts in bulk tests.
+3. **Move volume out of the synchronous path.** The synchronous 10-second CPU budget is for work the user is waiting on. Everything else is queueable, batch, or platform-event driven (see **principle-async-for-volume**).
+4. **Isolate the failure domains.** Callouts after DML fail with "uncommitted work pending". Async work enqueued at the wrong moment outlives its data. Transaction boundaries are design decisions; place them deliberately.
+5. **Remember flows share the budget.** A record-triggered flow's queries count against the same 100-query limit as the trigger on the same object. The automation map (see **sf-how**) is where you see the total cost of a save.
+
+## Gotchas and failure modes
+
+- **Uncatchable means unrecoverable.** A `try/catch` around a SOQL loop does nothing for the limit; it only catches the catchable exceptions. Prevention is the only strategy.
+- **Partial state on death.** When a transaction dies at a limit, everything rolls back, including work that succeeded. Side effects that cannot roll back (callouts already made, emails already sent) may have already escaped.
+- **Managed packages share your org.** Certified packages get their own per-namespace limits for most counters, but CPU time and a few others are shared across all namespaces. A chatty package eats your CPU budget.
+
+## Proof you are following it
+
+Bulk tests assert headroom (`Limits.getQueries()` flat at 200 records), the debug log's `LIMIT_USAGE_FOR_NS` block shows the transaction far from every ceiling, and no design relies on catching `System.LimitException`.
+
+## Source
+
+Execution Governors and Limits, Apex Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_gov_limits.htm; Salesforce Well-Architected: https://architect.salesforce.com/well-architected/overview

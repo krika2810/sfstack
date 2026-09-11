@@ -1,32 +1,48 @@
 ---
 name: principle-encode-lessons-in-structure
-description: "Apply when you catch yourself writing the same instruction a second time, or notice a recurring correction. Encode the rule as a lint, metadata flag, runtime check, or script instead of more text."
+description: "Apply when you catch yourself writing the same instruction a second time, or notice a recurring correction. Encode the rule as a lint, a validation rule, a test, a CI check, or a script instead of more text."
 disable-model-invocation: true
 ---
-<!-- Vendored verbatim from pstack (https://github.com/cursor/plugins/tree/main/pstack @ f5bdd68), Copyright (c) 2026 Lauren Tan, MIT License. See NOTICE.pstack in this repo. -->
 
 # Encode Lessons in Structure
 
-Encode recurring fixes in mechanisms (tools, code, metadata, automation) instead of textual instructions. Every error, human correction, and unexpected outcome is a learning signal. Capture it, route it, and close the loop.
+When you catch yourself writing the same instruction a second time, stop writing it. Text instructions ask the reader to notice, remember, and comply. Structure enforces. Every correction, every surprise, every "don't do that again" is a learning signal: capture it, route it to the strongest mechanism that can hold it, and close the loop by applying it now.
 
-**Why:** Textual instructions are easy to miss. They require the reader to notice, remember, and comply. Structural mechanisms (lint rules, metadata flags, runtime checks, automation scripts) enforce the rule without cooperation.
+## When it applies
 
-**Pattern:**
-When you catch yourself writing the same instruction a second time:
-1. Ask: can this be a lint rule, a metadata flag, a runtime check, or a script?
-2. If yes, encode it. Delete the instruction
-3. If no (requires judgment), make the instruction more prominent and add an example of the failure mode
+- The same review comment appears on a second pull request.
+- The same mistake ships twice.
+- A runbook step exists only to say "remember to...".
 
-**Pick the strongest mechanism.** When more than one mechanism would work, choose the strongest the situation allows (an unrepresentable state that cannot compile, then a lint or banned API that fails CI, then a canonical helper, then a runtime check), because agents copy whatever the surrounding code already does and a weaker guard becomes the next template.
+## The pattern
 
-**Corollary:** If the fix is structural, only use the structural fix. The instruction is the symptom.
+1. **Ask: can this be a check?** A lint rule, a CI gate, a test, a validation rule, a metadata constraint, a script.
+2. **If yes, encode it and delete the instruction.** The instruction was the symptom.
+3. **If no (it needs judgment),** make the instruction more prominent and attach an example of the failure mode.
 
-**Feedback loop:**
-- **Capture every correction.** When the human intervenes or tests fail, decide if it's a one-off or a pattern.
-- **Route to the right layer.** One-off -> brain note. Recurring fix -> skill or lint rule. Systemic issue -> principle.
-- **Close the loop.** Don't just record. Apply now or create a concrete todo.
+Pick the strongest mechanism the situation allows: a state the compiler or platform makes impossible beats a CI check, which beats a canonical helper, which beats a comment. People and agents copy what the surrounding code does; a weak guard becomes the next bad template.
 
-**Anti-patterns:**
-- Acknowledging without recording ("I'll keep that in mind" does not persist)
-- Recording without routing (a brain note about a lint rule that should exist is wasted unless the lint rule gets implemented)
-- Fixing without generalizing (fixing one instance while leaving the recurring pattern intact)
+## Salesforce application notes
+
+The platform gives you unusually strong encoding mechanisms:
+
+- **"Don't ship code without tests"** is already structural: the 75% deploy gate. Extend it with a CI step running `sf project deploy validate` on every PR so the gate fires before merge, not at release time.
+- **"Don't query without a filter on this object"** becomes a Salesforce Code Analyzer rule run in CI: `sf code-analyzer run --rule-selector Recommended`.
+- **"This status transition is illegal"** becomes a validation rule or an Apex guard the platform enforces, not a wiki page.
+- **"Always set the external ID on load"** becomes a before-save flow or a required-field constraint.
+- **Agent-side lessons** route to the skill files: a review gap becomes a line in **sf-interrogate**, a playbook gap becomes a playbook edit. That routing loop is the **sf-reflect** skill.
+- **Recurring corrections in prompts or skills** get encoded into the skill text itself (this is how sfstack's own files should evolve).
+
+## The feedback loop
+
+- **Capture every correction.** One-off or pattern?
+- **Route to the right layer.** One-off: note it. Recurring: skill line, lint rule, or platform constraint. Systemic: a principle.
+- **Close the loop.** Apply the encoding now or file a concrete todo. "I'll keep that in mind" does not persist.
+
+## Proof it applied
+
+The recurring instruction is gone from prose and present as a mechanism: a rule, a test, a gate, or a constraint that fails loudly when violated.
+
+## Credit
+
+Originally from Lauren Tan's pstack (MIT, (c) 2026 Lauren Tan, see `NOTICE.pstack`), vendored and expanded with Salesforce application notes.

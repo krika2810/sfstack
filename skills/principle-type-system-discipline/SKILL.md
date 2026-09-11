@@ -1,32 +1,55 @@
 ---
 name: principle-type-system-discipline
-description: "Apply when designing types, reviewing a function signature, or writing code in any statically-typed language. Make illegal states unrepresentable, brand semantic primitives, parse external data at boundaries, refuse to lie to the compiler, exhaust variants, derive from authoritative schemas."
+description: "Apply when designing types, signatures, or schema in Apex or any typed layer. Make illegal states unrepresentable, distinguish semantically different primitives, parse external data at boundaries, and let the compiler or the platform catch what it can."
 disable-model-invocation: true
 ---
-<!-- Vendored verbatim from pstack (https://github.com/cursor/plugins/tree/main/pstack @ f5bdd68), Copyright (c) 2026 Lauren Tan, MIT License. See NOTICE.pstack in this repo. -->
 
 # Type System Discipline
 
-The type checker is a proof assistant. Use it to eliminate impossible states, mismatched primitives, and unhandled variants at compile time. A case the types let you ignore becomes a runtime failure the compiler could have stopped. Prefer defining errors and special cases out of existence over proliferating handlers. Unrepresentable states, total functions, and interface redesign (the patterns below) are the tools.
+The type checker is a proof assistant: use it to eliminate impossible states and unhandled cases at compile time instead of discovering them at runtime. Prefer defining errors out of existence over proliferating handlers. A case the types let you ignore becomes the production incident the compiler could have stopped.
 
-Applies to any typed language. Skills like `typescript-best-practices` ground it in specific syntax.
+## When it applies
 
-**The patterns:**
+Designing types, reviewing a signature, shaping schema, or writing in any typed layer of the stack.
 
-- **Make illegal states unrepresentable.** Model variants as sum types: discriminated unions in TypeScript, enums with payloads in Rust/Swift/Kotlin, sealed classes in Scala, ADTs in Haskell/OCaml. Don't model state as a bag of optional fields where contradictory combinations compile. A subtle anti-pattern: `{ completed: boolean; completedAt?: Date }` admits `completed: true; completedAt: undefined`, which is meaningless. Derive the boolean from a single source like `completedAt !== null`, or model the variants explicitly as `{ kind: 'open' } | { kind: 'done'; at: Date }`. If a bug forces the question "wait, can this combination actually happen?", the type is too loose.
-- **Types are constructions, not restrictions.** Build the type up from the values you want instead of carving them out of a looser type with checks. The invariant that seems to need a refinement type is usually a construction away. A non-empty list is a head plus a rest, not a list with a length check. A valid time range is a start plus a duration, not two timestamps you must keep ordered. No representation is privileged. A list of pairs is an even-length list if you interpret it that way, so choose the shape that cannot build the illegal value and expose the interface callers need on top.
-- **Brand semantic primitives.** `UserId` and `OrderId` are strings underneath but should not be interchangeable. Newtypes in Rust, opaque types in Swift, value classes in Kotlin, phantom types in Haskell, branded intersections in TypeScript. Validate once at creation, trust the type downstream.
-- **External data is untyped until parsed.** RPC payloads, JSON, IPC messages, CLI args, config files, environment variables, database rows. Have a parse function at every boundary that turns unstructured input into the typed model. See the **boundary-discipline** principle skill for where to put validation.
-- **Don't lie to the type system.** Casts, unsafe coercions, and assertion functions that bypass the compiler are latent runtime crashes. If the compiler can't prove a fact, prove it (validate, narrow, refine the model) or accept that the cast is a hazard.
-- **Exhaustive matching is the compiler's job.** When you match on a sum type, the compiler must fail compilation if a new variant is added without handling. Use the idiom your language provides: `never`-typed binding in TypeScript, unannotated `match` in Rust, `-Wincomplete-patterns` in Haskell, sealed-class match exhaustiveness in Kotlin.
-- **Derive types from authoritative schemas.** When a protocol buffer, OpenAPI spec, GraphQL schema, database migration, or design-system token file defines a shape, derive from it instead of hand-rolling a parallel type. See the **encode-lessons-in-structure** principle skill.
-- **Strengthen a type only where partiality appears.** A runtime assertion, null check, or "this should never happen" throw marks the place a type is too weak. Push that check up into the type. Then stop. The type system's job is to track the cases each use site must handle, not to describe the data as precisely as possible. Prefer total functions. `sum` of an empty list is 0, so it takes the plain list. `head` of an empty list has no answer, so it demands the non-empty one.
+## The patterns
 
-**The tests:**
+1. **Make illegal states unrepresentable.** Model variants as explicit types, not bags of optional fields where contradictory combinations compile. If a bug forces the question "can this combination actually happen?", the type is too loose.
+2. **Types are constructions, not restrictions.** Build the type up from the values you want instead of carving them out of a looser type with runtime checks.
+3. **Distinguish semantically different primitives.** Two strings that mean different things (an order number and an account number) should not be interchangeable.
+4. **External data is untyped until parsed.** JSON, API payloads, CLI input, config: a parse function at every boundary turns unstructured input into the typed model (see **principle-boundary-discipline**).
+5. **Do not lie to the type system.** Casts and assertions that bypass the compiler are latent runtime crashes. If the compiler cannot prove a fact, validate at the boundary or accept the hazard consciously.
+6. **Exhaust the variants.** When you switch on a type or status, the structure should fail loudly when a new variant arrives unhandled.
+7. **Derive from authoritative schemas.** When an API spec, a schema, or a metadata definition owns the shape, derive from it instead of hand-rolling a parallel type (see **principle-encode-lessons-in-structure**).
 
-- "Can I write a comment explaining when this combination of fields is valid?" If yes, the type is too loose. Split it into a sum type.
-- "Do two of my function arguments share a primitive type but mean different things?" Brand them.
-- "Where did this `any`, this `as`, this `assertNotNull` come from?" Trace it to the boundary and validate there instead.
-- "If a new variant is added next month, will the compiler tell the next agent where to add a case?" If no, the match isn't exhaustive.
-- "Is this type duplicating a shape another file owns?" Derive instead.
-- "Am I strengthening this type to keep an operation total, or just to be more precise?" If nothing would otherwise panic, keep the plain type.
+## Salesforce application notes
+
+Apex is nominally typed and the platform adds its own type layer, so this principle has platform-specific teeth:
+
+- **The schema is the strongest type system you have.** A picklist is an enum the platform enforces. A required field is a non-null guarantee. A validation rule is a platform-checked invariant. Putting a constraint in the schema beats asserting it in five Apex classes, because the schema covers every writer: UI, API, integrations, data loads.
+- **Record types and custom metadata model variants.** An order that can be internal or external with different required fields is two record types, not one object with conditionally-required fields checked in triggers.
+- **The bag-of-optional-fields anti-pattern is common in Apex wrappers:** an integration response class with twelve nullable fields where only certain combinations are valid. Split it into typed variants with a parse method that rejects illegal combinations at the boundary.
+- **Switch on picklist values with an else that throws.** When a new picklist value arrives, the throw is the alarm; a silent fall-through is the incident.
+- **SObject types are branded primitives already:** passing an `Id` is safer than passing a `String` that might be an Id, and `Id.valueOf` validation belongs at the boundary. Use the specific SObject type (`Order__c`) over generic `SObject` wherever the code actually knows the type.
+- **`SObject` generics and `Map<String, Object>` are the "any" of Apex.** They have their place in framework code; everywhere else they are lies to the type system.
+
+## The tests
+
+- "Can I write a comment explaining when this combination of fields is valid?" Then the type is too loose; split it.
+- "Do two arguments share a primitive type but mean different things?" Distinguish them.
+- "If a new picklist value or variant arrives next month, does anything fail loudly?" If not, make it.
+- "Is this type duplicating a shape the schema or an API spec already owns?" Derive instead.
+
+## Gotchas and failure modes
+
+- **Precision past the point of use.** Types exist to make wrong code fail, not to describe data perfectly. If nothing would break, the plain type is fine.
+- **Framework code typed like app code.** The reusable layer genuinely needs generics; the app genuinely does not. Confusing the two produces either needless `SObject` soup or needless rigidity.
+- **Schema constraints that fight legitimate writers.** A validation rule that blocks the integration user is a type system lie of its own: it says the state is illegal while the business says it is required. Constraints must cover every writer or they get bypassed.
+
+## Proof it applied
+
+Illegal states fail to compile or fail at the boundary parse, new variants raise alarms instead of silent fall-throughs, and no wrapper class admits combinations the domain forbids.
+
+## Credit
+
+Originally from Lauren Tan's pstack (MIT, (c) 2026 Lauren Tan, see `NOTICE.pstack`), vendored and expanded with Salesforce application notes.

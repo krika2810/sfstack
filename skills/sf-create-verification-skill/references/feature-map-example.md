@@ -1,22 +1,36 @@
-# Feature Map example - Preferences (from pstack Part 1, Salesforce-translated)
+# Feature Map: example shape
 
-## Feature: Account Health Dashboard
+One block per core object. The point: a future change can see everything that fires on an object before it edits any of it. Order follows the platform's order of execution.
 
-Sub-features: health-badge (LWC on the Account record page), health-recalc (invocable Apex called by a record-triggered Flow), nightly-rollup (scheduled batch).
+## Order__c (custom object)
 
-## How to get to it (user POV)
+**Schema**: Master-detail to Account. Fields: Status__c (picklist), Total__c (currency, roll-up from Order_Line__c), External_Id__c (text, external ID, unique).
 
-Open any Account record. The badge renders in the highlights panel. Recalc fires automatically on edit of AnnualRevenue or Industry. The nightly job is invisible to users.
+**Before-save (record-triggered flow, before)**
+- `Order_Defaults` (flows/Order_Defaults.flow-meta.xml): sets Status__c to 'Draft' when null.
 
-## Driving it with sf + browser
+**Before triggers**
+- `OrderTrigger` -> `OrderTriggerHandler.beforeUpdate` (classes/OrderTriggerHandler.cls): validates Total__c > 0 when Status__c leaves 'Draft'.
 
-- UI: open the org (`sf org open --url-only --json` -> browser session), navigate to a seeded Account (`/lightning/r/Account/<id>/view`), screenshot the badge.
-- Data path: `sf data update record --sobject Account --record-id <id> --values "AnnualRevenue=5000000"`, then re-query `HealthScore__c` and assert the badge value changed.
-- Logic path: `sf apex run --file scripts/recalc.apex` to invoke the entry point directly; check the debug log for the Flow interview ID.
-- Batch path: `sf apex run` to execute the batch synchronously in a test context, or observe via `sf data query --query "SELECT Status FROM AsyncApexJob ..."`.
+**Validation rules**
+- `Order_Requires_Account_Contact` (objects/Order__c/validationRules): Primary_Contact__c required when Status__c = 'Submitted'.
 
-## Gotchas
+**After triggers**
+- `OrderTrigger` -> `OrderTriggerHandler.afterUpdate`: publishes `Order_Submitted__e` platform event on submit.
 
-- The recalc Flow is after-save; the badge does not update until the transaction commits - re-query, do not read the pre-update value.
-- HealthScore__c is FLS-restricted to the Health App permset; the verification user needs `sf org assign permset --name Health_App`.
-- The batch is scheduled, not triggered; in a scratch org either run it manually or shorten the schedule in seed metadata.
+**After-save (record-triggered flow, after)**
+- `Order_Notify` (flows/Order_Notify.flow-meta.xml): posts to Chatter on the Account when Status__c = 'Submitted'.
+
+**Roll-up / cascade**
+- `Total__c` roll-up summary recalculates when Order_Line__c changes (parent save procedure).
+
+**Async**
+- `OrderEventTrigger` on `Order_Submitted__e` enqueues `OrderSyncQueueable` (classes/OrderSyncQueueable.cls): callout to the ERP. Runs post-commit.
+
+## Order_Line__c
+
+**Schema**: Master-detail to Order__c (reparenting off). Lookup to Product2.
+
+**Before triggers**: none. **Flows**: none. **Validation rules**: `Line_Quantity_Positive`.
+
+**Notes**: quantity changes recalculate the Order roll-up, which re-runs the Order save procedure. Any change here is a change to Order behavior too.
